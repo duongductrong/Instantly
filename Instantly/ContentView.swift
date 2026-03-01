@@ -1,12 +1,5 @@
-//
-//  ContentView.swift
-//  Instantly
-//
-//  Created by duongductrong on 1/3/26.
-//
-
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext

@@ -1,12 +1,5 @@
-//
-//  InstantlyApp.swift
-//  Instantly
-//
-//  Created by duongductrong on 1/3/26.
-//
-
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct InstantlyApp: App {

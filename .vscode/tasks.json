@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build & Launch", // A descriptive name for your task
+      "type": "shell", // Specifies it's a shell command
+      "command": "./scripts/launch.sh --log-level debug", // The command to execute the script
+      "group": {
+        "kind": "build",
+        "isDefault": true // Optional: Makes it the default build task (run with Ctrl+Shift+B)
+      },
+      "presentation": {
+        "reveal": "always", // Optional: Always show the terminal when running
+        "panel": "shared"
+      },
+      "problemMatcher": [] // Optional: If you want to parse errors/warnings
+    }
+  ]
+}
