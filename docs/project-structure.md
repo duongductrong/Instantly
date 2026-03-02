@@ -37,6 +37,7 @@ Features/
 
 Services/                         // Global System Services
   PermissionService.swift         // Simple Service (Single File)
+  ActiveAppContextService.swift   // Captures frontmost app context & selected text via AX API
 
   Windowing/                      // Complex Service (Folder)
     WindowService.swift           // Main Interface

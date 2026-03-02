@@ -370,6 +370,18 @@ Features: Automated releases, changelog generation
 **Author**: Duy Nguyen
 **Repository**: https://github.com/claudekit/claudekit-engineer
 
+## Recent Changes
+
+### Phase 01 - ContextBar (2026-03-02)
+
+- **`Instantly/Services/ActiveAppContextService.swift`** (new, ~99 lines)
+  - `ContextItem` struct: `Identifiable`/`Equatable` model with `ContextType` (`activeApp`, `selectedText`), label, rawValue, icon, bundleIdentifier.
+  - `ActiveAppContextService` enum (namespace): static methods only.
+    - `captureContext() -> [ContextItem]` — must be called BEFORE panel takes focus; reads frontmost app via `NSWorkspace` and selected text via AX API.
+    - `isAccessibilityGranted() -> Bool` — wraps `AXIsProcessTrusted()`.
+    - `requestAccessibilityPermission()` — prompts user via `AXIsProcessTrustedWithOptions`.
+    - `selectedText(from pid: pid_t) -> String?` — reads `kAXFocusedUIElementAttribute` then `kAXSelectedTextAttribute`; truncates display label to 80 chars.
+
 ## Unresolved Questions
 
 None identified. All core components are well-documented and functional.
