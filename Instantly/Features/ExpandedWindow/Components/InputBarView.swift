@@ -15,7 +15,7 @@ struct InputBarView: View {
             HStack(alignment: .center, spacing: 10) {
                 MultiLineTextView(
                     text: $viewModel.queryText,
-                    placeholder: "Ask Highlight anything...",
+                    placeholder: "Ask anything...",
                     font: .systemFont(ofSize: 14),
                     textColor: .white,
                     maxHeight: maxInputHeight,

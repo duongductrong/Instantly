@@ -4,10 +4,13 @@ struct ContextChipView: View {
     let item: ContextItem
     var onRemove: (() -> Void)?
 
+    @State private var isTooltipVisible = false
+    @State private var hoverTimer: Timer?
+
     var body: some View {
         HStack(spacing: 4) {
             chipIcon
-            Text(item.label)
+            Text(item.type == .selectedText ? "Selected Text" : item.label)
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.8))
                 .lineLimit(1)
@@ -26,6 +29,34 @@ struct ContextChipView: View {
         .padding(.vertical, 5)
         .background(.white.opacity(0.09))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .onHover { hovering in
+            if item.type == .selectedText {
+                if hovering {
+                    hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { _ in
+                        DispatchQueue.main.async {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                isTooltipVisible = true
+                            }
+                        }
+                    }
+                } else {
+                    hoverTimer?.invalidate()
+                    hoverTimer = nil
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isTooltipVisible = false
+                    }
+                }
+            }
+        }
+        .popover(isPresented: $isTooltipVisible, arrowEdge: .bottom) {
+            Text(item.rawValue ?? item.label)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+                .lineLimit(10)
+                .padding(10)
+                .frame(maxWidth: 280)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder

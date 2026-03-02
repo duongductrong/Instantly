@@ -19,7 +19,7 @@ struct HeaderView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
 
-                Text("Highlight AI")
+                Text("Instantly")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
 
