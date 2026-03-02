@@ -20,32 +20,44 @@ struct InputBarView: View {
                     textColor: .white,
                     maxHeight: maxInputHeight,
                     onSubmit: {
-                        // Handle submit — future integration point
+                        viewModel.sendMessage()
                     },
                     dynamicHeight: $textHeight
                 )
                 .frame(height: textHeight)
                 .animation(.easeOut(duration: 0.15), value: textHeight)
 
-                Button(action: {}) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 28, height: 28)
-                        .background(Color.white.opacity(0.1))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
+                if viewModel.isLoading {
+                    Button(action: { viewModel.stopGenerating() }) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white)
+                            .frame(width: 28, height: 28)
+                            .background(Color.red.opacity(0.7))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: {}) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 28, height: 28)
+                            .background(Color.white.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
 
-                Button(action: {}) {
-                    Image(systemName: "at")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 28, height: 28)
-                        .background(Color.white.opacity(0.1))
-                        .clipShape(Circle())
+                    Button(action: {}) {
+                        Image(systemName: "at")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 28, height: 28)
+                            .background(Color.white.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
