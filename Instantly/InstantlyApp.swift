@@ -1,25 +1,21 @@
-import SwiftData
 import SwiftUI
 
 @main
 struct InstantlyApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        // No visible windows — panel managed by PanelController
+        Settings {
+            EmptyView()
         }
-        .modelContainer(sharedModelContainer)
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_: Notification) {
+        PanelController.shared.setupHotkey()
+        PanelController.shared.observeScreenChanges()
+        PanelController.shared.show()
     }
 }

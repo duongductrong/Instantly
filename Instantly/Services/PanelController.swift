@@ -1,0 +1,227 @@
+import AppKit
+import Carbon.HIToolbox
+import SwiftUI
+
+/// Central controller managing panel lifecycle, animation, hotkey, and interaction monitors.
+@MainActor
+final class PanelController {
+    static let shared = PanelController()
+
+    enum PanelState {
+        case hidden, collapsed, expanded
+    }
+
+    private(set) var state: PanelState = .hidden
+    private var panel: FloatingPanel?
+    private let contentViewModel = PanelContentViewModel()
+
+    // Event monitors
+    private var mouseMonitor: Any?
+    private var escMonitor: Any?
+    private var hotKeyRef: EventHotKeyRef?
+
+    private init() {}
+
+    // MARK: - Hotkey Registration (Carbon API)
+
+    func setupHotkey() {
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType(0x494E_5354) // "INST"
+        hotKeyID.id = 1
+
+        let modifiers = UInt32(cmdKey)
+        RegisterEventHotKey(
+            UInt32(kVK_ANSI_Slash),
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ -> OSStatus in
+            Task { @MainActor in
+                PanelController.shared.toggle()
+            }
+            return noErr
+        }, 1, &eventType, nil, nil)
+    }
+
+    // MARK: - Panel Lifecycle
+
+    func show() {
+        guard panel == nil else {
+            panel?.orderFront(nil)
+            state = .collapsed
+            return
+        }
+
+        let view = PanelContentView(viewModel: contentViewModel)
+        let newPanel = FloatingPanel(contentView: view)
+
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
+        let origin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
+        let frame = NSRect(origin: origin, size: pillSize)
+
+        newPanel.setFrame(frame, display: true)
+        newPanel.updateCornerRadius(DesignTokens.pillCornerRadius)
+        newPanel.orderFront(nil)
+
+        panel = newPanel
+        state = .collapsed
+        contentViewModel.isExpanded = false
+        contentViewModel.showContent = false
+    }
+
+    func hide() {
+        stopMouseMonitor()
+        stopEscMonitor()
+        panel?.orderOut(nil)
+        state = .hidden
+    }
+
+    func toggle() {
+        switch state {
+        case .hidden:
+            show()
+            expand()
+        case .collapsed:
+            expand()
+        case .expanded:
+            collapse()
+        }
+    }
+
+    // MARK: - Expand / Collapse
+
+    func expand() {
+        guard state == .collapsed, let panel else { return }
+
+        let expandedSize = CGSize(
+            width: DesignTokens.expandedWidth,
+            height: DesignTokens.expandedHeight
+        )
+        let expandedOrigin = ScreenPositionService.expandedOrigin(
+            pillOrigin: panel.frame.origin,
+            expandedSize: expandedSize
+        )
+        let expandedFrame = NSRect(origin: expandedOrigin, size: expandedSize)
+
+        panel.animateFrame(
+            to: expandedFrame,
+            cornerRadius: DesignTokens.panelCornerRadius,
+            duration: DesignTokens.morphSpringResponse
+        )
+
+        contentViewModel.expand()
+        state = .expanded
+        panel.makeKeyAndOrderFront(nil)
+
+        startMouseMonitor()
+        startEscMonitor()
+    }
+
+    func collapse() {
+        guard state == .expanded, let panel else { return }
+        stopMouseMonitor()
+        stopEscMonitor()
+
+        contentViewModel.collapse()
+
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
+        let pillOrigin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
+        let pillFrame = NSRect(origin: pillOrigin, size: pillSize)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + DesignTokens.collapseContentDuration) {
+            panel.animateFrame(
+                to: pillFrame,
+                cornerRadius: DesignTokens.pillCornerRadius,
+                duration: DesignTokens.morphSpringResponse
+            )
+        }
+
+        state = .collapsed
+    }
+
+    // MARK: - Event Monitors
+
+    private func startMouseMonitor() {
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self, self.state == .expanded, let panel = self.panel else { return }
+                if !panel.frame.contains(NSEvent.mouseLocation) {
+                    self.collapse()
+                }
+            }
+        }
+    }
+
+    private func stopMouseMonitor() {
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseMonitor = nil
+        }
+    }
+
+    private func startEscMonitor() {
+        guard escMonitor == nil else { return }
+        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
+                DispatchQueue.main.async { self?.collapse() }
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func stopEscMonitor() {
+        if let monitor = escMonitor {
+            NSEvent.removeMonitor(monitor)
+            escMonitor = nil
+        }
+    }
+
+    // MARK: - Screen Change Observer
+
+    func observeScreenChanges() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reposition()
+        }
+    }
+
+    private func reposition() {
+        guard let panel, state != .hidden else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        if state == .collapsed {
+            let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
+            let origin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
+            panel.setFrame(NSRect(origin: origin, size: pillSize), display: true)
+        } else {
+            let expandedSize = CGSize(
+                width: DesignTokens.expandedWidth,
+                height: DesignTokens.expandedHeight
+            )
+            let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
+            let pillOrigin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
+            let expandedOrigin = ScreenPositionService.expandedOrigin(
+                pillOrigin: pillOrigin,
+                expandedSize: expandedSize
+            )
+            panel.setFrame(NSRect(origin: expandedOrigin, size: expandedSize), display: true)
+        }
+    }
+}
