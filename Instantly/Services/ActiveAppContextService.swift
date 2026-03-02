@@ -39,21 +39,21 @@ enum ActiveAppContextService {
             ))
         }
 
-        // Selected text chip (only if AX permitted)
-        if isAccessibilityGranted(),
-           let text = selectedText(from: app.processIdentifier),
-           !text.isEmpty
-        {
-            let truncated = text.count > 80
-                ? String(text.prefix(77)) + "..."
-                : text
-            items.append(ContextItem(
-                type: .selectedText,
-                label: truncated,
-                rawValue: text,
-                icon: nil,
-                bundleIdentifier: app.bundleIdentifier
-            ))
+        // Selected text chip (AX first, clipboard fallback for Electron apps like VSCode)
+        if isAccessibilityGranted() {
+            let text = selectedText(from: app.processIdentifier) ?? selectedTextViaClipboard()
+            if let text, !text.isEmpty {
+                let truncated = text.count > 80
+                    ? String(text.prefix(77)) + "..."
+                    : text
+                items.append(ContextItem(
+                    type: .selectedText,
+                    label: truncated,
+                    rawValue: text,
+                    icon: nil,
+                    bundleIdentifier: app.bundleIdentifier
+                ))
+            }
         }
 
         return items
@@ -96,5 +96,62 @@ enum ActiveAppContextService {
         else { return nil }
 
         return selectedValue as? String
+    }
+
+    // MARK: - Selected Text via Clipboard (fallback for Electron apps)
+
+    /// Simulates Cmd+C to copy selected text, reads the clipboard, then restores original contents.
+    /// Used as fallback when AX `kAXSelectedTextAttribute` isn't supported (e.g. VSCode, Slack).
+    static func selectedTextViaClipboard() -> String? {
+        let pasteboard = NSPasteboard.general
+        let changeCount = pasteboard.changeCount
+
+        // Save current clipboard contents
+        let backup = pasteboard.pasteboardItems?.compactMap { item -> (String, Data)? in
+            guard let type = item.types.first,
+                  let data = item.data(forType: type)
+            else { return nil }
+            return (type.rawValue, data)
+        }
+
+        // Clear clipboard so we can detect if Cmd+C actually wrote something
+        pasteboard.clearContents()
+
+        // Simulate Cmd+C via CGEvent
+        let source = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
+        else {
+            restoreClipboard(backup: backup)
+            return nil
+        }
+        keyDown.flags = CGEventFlags.maskCommand
+        keyUp.flags = CGEventFlags.maskCommand
+        keyDown.post(tap: CGEventTapLocation.cghidEventTap)
+        keyUp.post(tap: CGEventTapLocation.cghidEventTap)
+
+        // Brief wait for the target app to process the copy command
+        usleep(50_000) // 50ms
+
+        // Read the result — only if clipboard actually changed
+        let copiedText: String? = if pasteboard.changeCount != changeCount {
+            pasteboard.string(forType: .string)
+        } else {
+            nil
+        }
+
+        // Restore original clipboard contents
+        restoreClipboard(backup: backup)
+
+        return copiedText
+    }
+
+    private static func restoreClipboard(backup: [(String, Data)]?) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        guard let backup, !backup.isEmpty else { return }
+        for (typeRaw, data) in backup {
+            pasteboard.setData(data, forType: NSPasteboard.PasteboardType(typeRaw))
+        }
     }
 }

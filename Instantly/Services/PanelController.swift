@@ -33,7 +33,7 @@ final class PanelController {
 
         let modifiers = UInt32(cmdKey)
         RegisterEventHotKey(
-            UInt32(kVK_ANSI_Slash),
+            UInt32(kVK_ANSI_Comma),
             modifiers,
             hotKeyID,
             GetApplicationEventTarget(),
