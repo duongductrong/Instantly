@@ -8,7 +8,7 @@ struct PanelContentView: View {
             VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
 
             if viewModel.isExpanded {
-                ExpandedWindowView()
+                ExpandedWindowView(viewModel: PanelController.shared.expandedViewModel)
                     .opacity(viewModel.showContent ? 1 : 0)
             } else {
                 FloatingPillView()

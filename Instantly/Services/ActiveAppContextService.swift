@@ -14,6 +14,7 @@ struct ContextItem: Identifiable, Equatable {
         case selectedText
     }
 
+    /// Identity-based equality — each capture is a distinct snapshot
     static func == (lhs: ContextItem, rhs: ContextItem) -> Bool {
         lhs.id == rhs.id
     }

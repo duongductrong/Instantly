@@ -14,11 +14,13 @@ final class PanelController {
     private(set) var state: PanelState = .hidden
     private var panel: FloatingPanel?
     private let contentViewModel = PanelContentViewModel()
+    let expandedViewModel = ExpandedWindowViewModel()
 
     // Event monitors
     private var mouseMonitor: Any?
     private var escMonitor: Any?
     private var hotKeyRef: EventHotKeyRef?
+    private var hasRequestedAXPermission = false
 
     private init() {}
 
@@ -44,8 +46,19 @@ final class PanelController {
             eventKind: UInt32(kEventHotKeyPressed)
         )
         InstallEventHandler(GetApplicationEventTarget(), { _, _, _ -> OSStatus in
+            // Carbon hotkey callbacks run on the main run loop on macOS
+            assert(Thread.isMainThread, "Carbon hotkey callback must run on main thread")
+            // Capture context SYNCHRONOUSLY before panel steals frontmost status
+            let contextItems = ActiveAppContextService.captureContext()
             Task { @MainActor in
-                PanelController.shared.toggle()
+                let controller = PanelController.shared
+                // Request AX permission once on first hotkey press
+                if !controller.hasRequestedAXPermission {
+                    controller.hasRequestedAXPermission = true
+                    ActiveAppContextService.requestAccessibilityPermission()
+                }
+                controller.expandedViewModel.setContext(contextItems)
+                controller.toggle()
             }
             return noErr
         }, 1, &eventType, nil, nil)
@@ -133,6 +146,7 @@ final class PanelController {
         stopEscMonitor()
 
         contentViewModel.collapse()
+        expandedViewModel.clearContext()
 
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
