@@ -44,9 +44,18 @@ class FloatingPanel: NSPanel {
     }
 
     func animateFrame(to rect: NSRect, cornerRadius: CGFloat, duration: TimeInterval) {
+        // Use custom cubic bezier for fluid slide-up feel (ease-out with slight overshoot)
+        let controlPoints: [Float] = [0.22, 1.0, 0.36, 1.0]
+        let timing = CAMediaTimingFunction(
+            controlPoints: controlPoints[0],
+            controlPoints[1],
+            controlPoints[2],
+            controlPoints[3]
+        )
+
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.timingFunction = timing
             self.animator().setFrame(rect, display: true)
         }
 
@@ -55,6 +64,7 @@ class FloatingPanel: NSPanel {
             anim.fromValue = layer.cornerRadius
             anim.toValue = cornerRadius
             anim.duration = duration
+            anim.timingFunction = timing
             layer.add(anim, forKey: "cornerRadius")
             layer.cornerRadius = cornerRadius
         }

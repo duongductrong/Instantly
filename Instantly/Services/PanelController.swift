@@ -101,13 +101,14 @@ final class PanelController {
 
     func expand() {
         guard state == .collapsed, let panel else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
         let expandedSize = CGSize(
             width: DesignTokens.expandedWidth,
             height: DesignTokens.expandedHeight
         )
         let expandedOrigin = ScreenPositionService.expandedOrigin(
-            pillOrigin: panel.frame.origin,
+            screen: screen,
             expandedSize: expandedSize
         )
         let expandedFrame = NSRect(origin: expandedOrigin, size: expandedSize)
@@ -115,7 +116,7 @@ final class PanelController {
         panel.animateFrame(
             to: expandedFrame,
             cornerRadius: DesignTokens.panelCornerRadius,
-            duration: DesignTokens.morphSpringResponse
+            duration: DesignTokens.slideUpDuration
         )
 
         contentViewModel.expand()
@@ -142,7 +143,7 @@ final class PanelController {
             panel.animateFrame(
                 to: pillFrame,
                 cornerRadius: DesignTokens.pillCornerRadius,
-                duration: DesignTokens.morphSpringResponse
+                duration: DesignTokens.slideDownDuration
             )
         }
 
@@ -215,10 +216,8 @@ final class PanelController {
                 width: DesignTokens.expandedWidth,
                 height: DesignTokens.expandedHeight
             )
-            let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
-            let pillOrigin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
             let expandedOrigin = ScreenPositionService.expandedOrigin(
-                pillOrigin: pillOrigin,
+                screen: screen,
                 expandedSize: expandedSize
             )
             panel.setFrame(NSRect(origin: expandedOrigin, size: expandedSize), display: true)

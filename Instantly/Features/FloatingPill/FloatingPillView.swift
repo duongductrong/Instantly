@@ -4,31 +4,25 @@ struct FloatingPillView: View {
     @State private var viewModel = FloatingPillViewModel()
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-
-            Text("Instantly")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white.opacity(0.9))
-        }
-        .padding(.horizontal, 16)
-        .frame(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
-        .background(
-            ZStack {
-                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                Color.black.opacity(0.7)
+        Image(systemName: "sparkles")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: DesignTokens.pillSize, height: DesignTokens.pillSize)
+            .background(
+                ZStack {
+                    VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                    Color.black.opacity(0.7)
+                }
+            )
+            .clipShape(Circle())
+            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+            .scaleEffect(viewModel.isHovered ? 1.1 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: viewModel.isHovered)
+            .onHover { hovering in
+                viewModel.isHovered = hovering
             }
-        )
-        .clipShape(Capsule())
-        .scaleEffect(viewModel.isHovered ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: viewModel.isHovered)
-        .onHover { hovering in
-            viewModel.isHovered = hovering
-        }
-        .onTapGesture {
-            PanelController.shared.toggle()
-        }
+            .onTapGesture {
+                PanelController.shared.toggle()
+            }
     }
 }
