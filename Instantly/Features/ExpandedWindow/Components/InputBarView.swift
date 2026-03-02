@@ -2,22 +2,30 @@ import SwiftUI
 
 struct InputBarView: View {
     @Bindable var viewModel: ExpandedWindowViewModel
-    @FocusState private var isTextFieldFocused: Bool
+    @State private var textHeight: CGFloat = 22
+
+    /// Max height before scrollbar activates
+    private let maxInputHeight: CGFloat = 120
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
                 .background(Color.white.opacity(0.15))
 
-            HStack(spacing: 10) {
-                TextField("Ask Highlight anything...", text: $viewModel.queryText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white)
-                    .focused($isTextFieldFocused)
-                    .onSubmit {
+            HStack(alignment: .center, spacing: 10) {
+                MultiLineTextView(
+                    text: $viewModel.queryText,
+                    placeholder: "Ask Highlight anything...",
+                    font: .systemFont(ofSize: 14),
+                    textColor: .white,
+                    maxHeight: maxInputHeight,
+                    onSubmit: {
                         // Handle submit — future integration point
-                    }
+                    },
+                    dynamicHeight: $textHeight
+                )
+                .frame(height: textHeight)
+                .animation(.easeOut(duration: 0.15), value: textHeight)
 
                 Button(action: {}) {
                     Image(systemName: "mic.fill")
@@ -41,9 +49,6 @@ struct InputBarView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-        }
-        .onAppear {
-            isTextFieldFocused = true
         }
     }
 }
