@@ -13,5 +13,6 @@ struct ExpandedWindowView: View {
             width: DesignTokens.expandedWidth,
             height: DesignTokens.expandedHeight
         )
+        .preferredColorScheme(.dark)
     }
 }

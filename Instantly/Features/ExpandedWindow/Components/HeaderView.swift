@@ -40,9 +40,12 @@ struct HeaderView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.6))
 
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.6))
+                Button(action: { SettingsWindowController.shared.show() }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .buttonStyle(.plain)
             }
             .padding(.trailing, 16)
         }
