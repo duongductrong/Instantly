@@ -3,11 +3,17 @@ import SwiftUI
 struct HeaderView: View {
     var body: some View {
         HStack(spacing: 0) {
-            // Decorative traffic lights
+            // Traffic lights controls
             HStack(spacing: 6) {
-                Circle().fill(Color.red.opacity(0.85)).frame(width: 12, height: 12)
-                Circle().fill(Color.yellow.opacity(0.85)).frame(width: 12, height: 12)
-                Circle().fill(Color.green.opacity(0.85)).frame(width: 12, height: 12)
+                trafficLightButton(color: .red) {
+                    PanelController.shared.hide()
+                }
+                trafficLightButton(color: .yellow) {
+                    PanelController.shared.hide()
+                }
+                trafficLightButton(color: .green) {
+                    PanelController.shared.toggleExpandedWidth()
+                }
             }
             .padding(.leading, 16)
 
@@ -50,5 +56,14 @@ struct HeaderView: View {
             .padding(.trailing, 16)
         }
         .frame(height: 44)
+    }
+
+    private func trafficLightButton(color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Circle()
+                .fill(color.opacity(0.85))
+                .frame(width: 12, height: 12)
+        }
+        .buttonStyle(.plain)
     }
 }

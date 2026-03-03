@@ -94,6 +94,10 @@ final class PanelController {
     func hide() {
         stopMouseMonitor()
         stopEscMonitor()
+        expandedViewModel.clearContext()
+        expandedViewModel.resetExpandedWidth()
+        contentViewModel.isExpanded = false
+        contentViewModel.showContent = false
         panel?.orderOut(nil)
         state = .hidden
     }
@@ -122,10 +126,7 @@ final class PanelController {
             expandedViewModel.setContext(ActiveAppContextService.captureContext())
         }
 
-        let expandedSize = CGSize(
-            width: DesignTokens.expandedWidth,
-            height: DesignTokens.expandedHeight
-        )
+        let expandedSize = currentExpandedSize()
         let expandedOrigin = ScreenPositionService.expandedOrigin(
             screen: screen,
             expandedSize: expandedSize
@@ -144,6 +145,25 @@ final class PanelController {
 
         startMouseMonitor()
         startEscMonitor()
+    }
+
+    func toggleExpandedWidth() {
+        guard state == .expanded, let panel else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        expandedViewModel.toggleExpandedWidth()
+
+        let expandedSize = currentExpandedSize()
+        let expandedOrigin = ScreenPositionService.expandedOrigin(
+            screen: screen,
+            expandedSize: expandedSize
+        )
+
+        panel.animateFrame(
+            to: NSRect(origin: expandedOrigin, size: expandedSize),
+            cornerRadius: DesignTokens.panelCornerRadius,
+            duration: 0.2
+        )
     }
 
     func collapse() {
@@ -232,15 +252,19 @@ final class PanelController {
             let origin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
             panel.setFrame(NSRect(origin: origin, size: pillSize), display: true)
         } else {
-            let expandedSize = CGSize(
-                width: DesignTokens.expandedWidth,
-                height: DesignTokens.expandedHeight
-            )
+            let expandedSize = currentExpandedSize()
             let expandedOrigin = ScreenPositionService.expandedOrigin(
                 screen: screen,
                 expandedSize: expandedSize
             )
             panel.setFrame(NSRect(origin: expandedOrigin, size: expandedSize), display: true)
         }
+    }
+
+    private func currentExpandedSize() -> CGSize {
+        CGSize(
+            width: expandedViewModel.expandedWidth,
+            height: DesignTokens.expandedHeight
+        )
     }
 }

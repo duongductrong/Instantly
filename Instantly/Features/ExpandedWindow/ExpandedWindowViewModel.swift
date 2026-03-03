@@ -2,6 +2,7 @@ import SwiftUI
 
 @Observable
 final class ExpandedWindowViewModel {
+    var expandedWidth: CGFloat = DesignTokens.expandedWidth
     var queryText: String = ""
     var attachments: [AttachmentItem] = []
     var statusMessage: String = ""
@@ -76,5 +77,16 @@ final class ExpandedWindowViewModel {
         stopGenerating()
         messages.removeAll()
         statusMessage = ""
+    }
+
+    // MARK: - Window Size
+
+    func resetExpandedWidth() {
+        expandedWidth = DesignTokens.expandedWidth
+    }
+
+    func toggleExpandedWidth() {
+        let isDefaultWidth = expandedWidth == DesignTokens.expandedWidth
+        expandedWidth = isDefaultWidth ? DesignTokens.expandedToggledWidth : DesignTokens.expandedWidth
     }
 }

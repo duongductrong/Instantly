@@ -11,7 +11,7 @@ struct ExpandedWindowView: View {
             InputBarView(viewModel: viewModel)
         }
         .frame(
-            width: DesignTokens.expandedWidth,
+            width: viewModel.expandedWidth,
             height: DesignTokens.expandedHeight
         )
         .preferredColorScheme(.dark)

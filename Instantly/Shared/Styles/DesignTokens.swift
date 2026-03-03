@@ -10,6 +10,7 @@ enum DesignTokens {
     static let pillWidth: CGFloat = pillSize
     static let pillHeight: CGFloat = pillSize
     static let expandedWidth: CGFloat = 480
+    static let expandedToggledWidth: CGFloat = 920
     static let expandedHeight: CGFloat = 520
 
     /// Layout
