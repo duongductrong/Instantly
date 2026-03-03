@@ -12,10 +12,16 @@ struct InstantlyApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
+        _ = SettingsService.shared
+
         PanelController.shared.setupHotkey()
         PanelController.shared.observeScreenChanges()
-        PanelController.shared.show()
+
+        if SettingsService.shared.settings.system.showPanelOnAppLaunch {
+            PanelController.shared.show()
+        }
     }
 }

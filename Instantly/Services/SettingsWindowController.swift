@@ -12,6 +12,7 @@ final class SettingsWindowController {
 
     func show() {
         if let window {
+            applyWindowChrome(window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -21,12 +22,13 @@ final class SettingsWindowController {
         let hostingView = NSHostingView(rootView: settingsView)
 
         let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 560),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        newWindow.title = "Settings"
+        applyWindowChrome(newWindow)
+        newWindow.minSize = NSSize(width: 780, height: 520)
         newWindow.contentView = hostingView
         newWindow.center()
         newWindow.isReleasedWhenClosed = false
@@ -34,5 +36,14 @@ final class SettingsWindowController {
         NSApp.activate(ignoringOtherApps: true)
 
         window = newWindow
+    }
+
+    private func applyWindowChrome(_ window: NSWindow) {
+        window.title = ""
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.toolbar = nil
+        window.isMovableByWindowBackground = true
     }
 }

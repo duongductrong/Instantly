@@ -1,22 +1,22 @@
 import Foundation
 
 enum OllamaChatService {
-    private static let baseURL = "http://localhost:11434"
-    private static let model = "llama3.1"
-
     // MARK: - Error Types
 
     enum ChatError: LocalizedError {
+        case invalidBaseURL
         case serverUnavailable
-        case modelNotFound
+        case modelNotFound(String)
         case invalidResponse(String)
         case requestFailed(Int)
 
         var errorDescription: String? {
             switch self {
+            case .invalidBaseURL:
+                "Ollama base URL is invalid."
             case .serverUnavailable:
-                "Cannot connect to Ollama. Make sure it's running on localhost:11434."
-            case .modelNotFound:
+                "Cannot connect to Ollama. Make sure it is running and reachable."
+            case let .modelNotFound(model):
                 "Model \(model) not found. Run: ollama pull \(model)"
             case let .invalidResponse(detail):
                 "Invalid response from Ollama: \(detail)"
@@ -32,11 +32,22 @@ enum OllamaChatService {
         let model: String
         let messages: [MessagePayload]
         let stream: Bool
+        let options: ChatOptions
     }
 
     private struct MessagePayload: Encodable {
         let role: String
         let content: String
+    }
+
+    private struct ChatOptions: Encodable {
+        let temperature: Double
+        let numPredict: Int
+
+        enum CodingKeys: String, CodingKey {
+            case temperature
+            case numPredict = "num_predict"
+        }
     }
 
     private struct ChatStreamChunk: Decodable {
@@ -50,7 +61,7 @@ enum OllamaChatService {
 
     // MARK: - Health Check
 
-    static func isAvailable() async -> Bool {
+    static func isAvailable(baseURL: String) async -> Bool {
         guard let url = URL(string: baseURL) else { return false }
         do {
             let (_, response) = try await URLSession.shared.data(from: url)
@@ -64,29 +75,45 @@ enum OllamaChatService {
 
     static func sendStreamingChat(
         messages: [ChatMessage],
-        context: [ContextItem]
+        config: OllamaProviderConfig,
+        systemPrompt: String
     )
         -> AsyncThrowingStream<String, Error>
     {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let url = URL(string: "\(baseURL)/api/chat")!
+                    let baseURL = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let url = URL(string: "\(baseURL)/api/chat") else {
+                        throw ChatError.invalidBaseURL
+                    }
 
                     var payloadMessages: [MessagePayload] = []
 
-                    // Build system message from context
-                    let systemPrompt = buildSystemMessage(from: context)
-                    if !systemPrompt.isEmpty {
-                        payloadMessages.append(MessagePayload(role: "system", content: systemPrompt))
+                    let trimmedSystemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmedSystemPrompt.isEmpty {
+                        payloadMessages.append(MessagePayload(role: "system", content: trimmedSystemPrompt))
                     }
 
-                    // Add conversation messages (skip system role from history)
-                    for msg in messages where msg.role != .system {
-                        payloadMessages.append(MessagePayload(role: msg.role.rawValue, content: msg.content))
+                    // Add conversation messages (skip system role from history).
+                    for message in messages where message.role != .system {
+                        payloadMessages.append(
+                            MessagePayload(
+                                role: message.role.rawValue,
+                                content: message.content
+                            )
+                        )
                     }
 
-                    let requestBody = ChatRequest(model: model, messages: payloadMessages, stream: true)
+                    let requestBody = ChatRequest(
+                        model: config.model,
+                        messages: payloadMessages,
+                        stream: true,
+                        options: ChatOptions(
+                            temperature: config.temperature,
+                            numPredict: config.maxTokens
+                        )
+                    )
 
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
@@ -100,17 +127,19 @@ enum OllamaChatService {
                     }
 
                     switch httpResponse.statusCode {
-                    case 200: break
-                    case 404: throw ChatError.modelNotFound
-                    default: throw ChatError.requestFailed(httpResponse.statusCode)
+                    case 200:
+                        break
+                    case 404:
+                        throw ChatError.modelNotFound(config.model)
+                    default:
+                        throw ChatError.requestFailed(httpResponse.statusCode)
                     }
 
                     for try await line in bytes.lines {
                         try Task.checkCancellation()
+                        guard let data = line.data(using: .utf8), !data.isEmpty else { continue }
 
-                        guard let data = line.data(using: .utf8) else { continue }
                         let chunk = try JSONDecoder().decode(ChatStreamChunk.self, from: data)
-
                         if !chunk.message.content.isEmpty {
                             continuation.yield(chunk.message.content)
                         }
@@ -123,7 +152,8 @@ enum OllamaChatService {
                     continuation.finish()
                 } catch is CancellationError {
                     continuation.finish()
-                } catch let error as URLError where error.code == .cannotConnectToHost
+                } catch let error as URLError where
+                    error.code == .cannotConnectToHost
                     || error.code == .cannotFindHost
                     || error.code == .networkConnectionLost
                 {
@@ -137,24 +167,5 @@ enum OllamaChatService {
                 task.cancel()
             }
         }
-    }
-
-    // MARK: - System Message
-
-    private static func buildSystemMessage(from context: [ContextItem]) -> String {
-        var parts = ["You are a helpful AI assistant called Instantly."]
-
-        for item in context {
-            switch item.type {
-            case .activeApp:
-                parts.append("Active app: \(item.label)")
-            case .selectedText:
-                if let raw = item.rawValue {
-                    parts.append("Selected text:\n\(raw)")
-                }
-            }
-        }
-
-        return parts.count > 1 ? parts.joined(separator: "\n") : parts[0]
     }
 }

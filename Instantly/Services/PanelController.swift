@@ -20,48 +20,32 @@ final class PanelController {
     private var mouseMonitor: Any?
     private var escMonitor: Any?
     private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyHandlerRef: EventHandlerRef?
     private var hasRequestedAXPermission = false
+    private var activeHotkeyBinding: HotkeyBinding?
 
     private init() {}
 
     // MARK: - Hotkey Registration (Carbon API)
 
     func setupHotkey() {
-        var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = OSType(0x494E_5354) // "INST"
-        hotKeyID.id = 1
+        installHotKeyHandlerIfNeeded()
 
-        let modifiers = UInt32(cmdKey)
-        RegisterEventHotKey(
-            UInt32(kVK_ANSI_Comma),
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
+        let desiredBinding = SettingsService.shared.settings.system.globalHotkey
+        if registerHotKey(desiredBinding) {
+            activeHotkeyBinding = desiredBinding
+            return
+        }
 
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ -> OSStatus in
-            // Carbon hotkey callbacks run on the main run loop on macOS
-            assert(Thread.isMainThread, "Carbon hotkey callback must run on main thread")
-            // Capture context SYNCHRONOUSLY before panel steals frontmost status
-            let contextItems = ActiveAppContextService.captureContext()
-            Task { @MainActor in
-                let controller = PanelController.shared
-                // Request AX permission once on first hotkey press
-                if !controller.hasRequestedAXPermission {
-                    controller.hasRequestedAXPermission = true
-                    ActiveAppContextService.requestAccessibilityPermission()
-                }
-                controller.expandedViewModel.setContext(contextItems)
-                controller.toggle()
-            }
-            return noErr
-        }, 1, &eventType, nil, nil)
+        if let activeHotkeyBinding, registerHotKey(activeHotkeyBinding) {
+            return
+        }
+
+        let fallback = AppSettings.defaultValue.system.globalHotkey
+        if registerHotKey(fallback) {
+            activeHotkeyBinding = fallback
+            SettingsService.shared.updateSystem { $0.globalHotkey = fallback }
+        }
     }
 
     // MARK: - Panel Lifecycle
@@ -228,6 +212,72 @@ final class PanelController {
         if let monitor = escMonitor {
             NSEvent.removeMonitor(monitor)
             escMonitor = nil
+        }
+    }
+
+    private func installHotKeyHandlerIfNeeded() {
+        guard hotKeyHandlerRef == nil else { return }
+
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, _, _ -> OSStatus in
+                // Carbon hotkey callbacks run on the main run loop on macOS.
+                assert(Thread.isMainThread, "Carbon hotkey callback must run on main thread")
+                PanelController.shared.handleHotKeyPressed()
+                return noErr
+            },
+            1,
+            &eventType,
+            nil,
+            &hotKeyHandlerRef
+        )
+
+        if status != noErr {
+            hotKeyHandlerRef = nil
+        }
+    }
+
+    private func registerHotKey(_ binding: HotkeyBinding) -> Bool {
+        if let hotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            self.hotKeyRef = nil
+        }
+
+        guard binding.isValid else { return false }
+
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType(0x494E_5354) // "INST"
+        hotKeyID.id = 1
+
+        let status = RegisterEventHotKey(
+            binding.keyCode,
+            binding.carbonModifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        return status == noErr
+    }
+
+    private func handleHotKeyPressed() {
+        // Capture context SYNCHRONOUSLY before panel steals frontmost status.
+        let contextItems = ActiveAppContextService.captureContext()
+        Task { @MainActor in
+            let controller = PanelController.shared
+            // Request AX permission once on first hotkey press.
+            if !controller.hasRequestedAXPermission {
+                controller.hasRequestedAXPermission = true
+                ActiveAppContextService.requestAccessibilityPermission()
+            }
+            controller.expandedViewModel.setContext(contextItems)
+            controller.toggle()
         }
     }
 

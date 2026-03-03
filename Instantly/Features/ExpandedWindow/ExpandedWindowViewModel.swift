@@ -101,20 +101,37 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
         let text = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
 
+        let settings = SettingsService.shared.settings
+        let context = filteredContextItems(using: settings.assistant)
+        let systemPrompt = buildSystemPrompt(
+            assistantPrompt: settings.assistant.systemPrompt,
+            context: context
+        )
+
         queryText = ""
         statusMessage = ""
         messages.append(ChatMessage(role: .user, content: text))
         messages.append(ChatMessage(role: .assistant, content: ""))
         isLoading = true
 
+        guard settings.model.selectedProvider == .ollama else {
+            if var last = messages.last, last.role == .assistant {
+                last.content = "This provider is configured, but runtime integration is pending."
+                messages[messages.count - 1] = last
+            }
+            isLoading = false
+            return
+        }
+
         let currentMessages = messages.filter { $0.role != .assistant || !$0.content.isEmpty }
-        let context = contextItems
+        let ollamaConfig = settings.model.ollamaRuntimeConfig
 
         streamTask = Task { @MainActor in
             do {
                 let stream = OllamaChatService.sendStreamingChat(
                     messages: currentMessages,
-                    context: context
+                    config: ollamaConfig,
+                    systemPrompt: systemPrompt
                 )
                 for try await token in stream {
                     guard !Task.isCancelled else { break }
@@ -209,6 +226,39 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
                 $0.type == .selectedText && normalizedText($0.rawValue) == raw
             }
         }
+    }
+
+    private func filteredContextItems(using assistantSettings: AssistantSettings) -> [ContextItem] {
+        contextItems.filter { item in
+            switch item.type {
+            case .activeApp:
+                assistantSettings.includeActiveAppContext
+            case .selectedText:
+                assistantSettings.includeSelectedTextContext
+            }
+        }
+    }
+
+    private func buildSystemPrompt(assistantPrompt: String, context: [ContextItem]) -> String {
+        let basePrompt = assistantPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        var parts: [String] = [
+            basePrompt.isEmpty
+                ? AssistantSettings.defaultValue.systemPrompt
+                : basePrompt,
+        ]
+
+        for item in context {
+            switch item.type {
+            case .activeApp:
+                parts.append("Active app: \(item.label)")
+            case .selectedText:
+                if let raw = item.rawValue {
+                    parts.append("Selected text:\n\(raw)")
+                }
+            }
+        }
+
+        return parts.joined(separator: "\n")
     }
 
     private func normalizedText(_ text: String?) -> String? {
