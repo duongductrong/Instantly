@@ -92,9 +92,7 @@ struct BodyView: View {
         HStack {
             if message.role == .user { Spacer(minLength: 40) }
 
-            Text(message.content.isEmpty && message.role == .assistant ? "..." : message.content)
-                .font(.system(size: 14))
-                .foregroundStyle(.white)
+            messageText(for: message)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
@@ -106,6 +104,21 @@ struct BodyView: View {
                 .textSelection(.enabled)
 
             if message.role == .assistant { Spacer(minLength: 40) }
+        }
+    }
+
+    @ViewBuilder
+    private func messageText(for message: ChatMessage) -> some View {
+        let displayContent = message.content.isEmpty && message.role == .assistant ? "..." : message.content
+
+        if message.role == .assistant {
+            AssistantMarkdownView(content: displayContent)
+                .foregroundStyle(.white)
+        } else {
+            Text(displayContent)
+                .font(.system(size: 14))
+                .foregroundStyle(.white)
+                .textSelection(.enabled)
         }
     }
 
