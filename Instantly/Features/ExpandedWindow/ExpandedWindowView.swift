@@ -15,5 +15,13 @@ struct ExpandedWindowView: View {
             height: DesignTokens.expandedHeight
         )
         .preferredColorScheme(.dark)
+        .background {
+            Button("") {
+                viewModel.clearConversation()
+            }
+            .keyboardShortcut("n", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+        }
     }
 }
