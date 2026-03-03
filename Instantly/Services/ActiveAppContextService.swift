@@ -43,10 +43,15 @@ enum ActiveAppContextService {
         if isAccessibilityGranted() {
             let pid = app.processIdentifier
             let axSelectedText = selectedText(from: pid)
-            let shouldTryClipboardFallback = (axSelectedText?.isEmpty ?? true) && hasNonEmptySelection(
-                from: pid
-            )
-            let text = axSelectedText ?? (shouldTryClipboardFallback ? selectedTextViaClipboard() : nil)
+            let shouldTryClipboardFallback = (axSelectedText?.isEmpty ?? true)
+                && hasNonEmptySelection(from: pid)
+            let text: String? = if let axSelectedText, !axSelectedText.isEmpty {
+                axSelectedText
+            } else if shouldTryClipboardFallback {
+                selectedTextViaClipboard()
+            } else {
+                nil
+            }
             if let text, !text.isEmpty {
                 let truncated = text.count > 80
                     ? String(text.prefix(77)) + "..."
@@ -94,24 +99,26 @@ enum ActiveAppContextService {
     static func hasNonEmptySelection(from pid: pid_t) -> Bool {
         guard let element = focusedElement(from: pid) else { return false }
 
-        var selectedRangeValue: AnyObject?
+        if let range = rangeValue(from: element, attribute: kAXSelectedTextRangeAttribute as CFString) {
+            return range.length > 0
+        }
+
+        var selectedRangesValue: AnyObject?
         guard AXUIElementCopyAttributeValue(
             element,
-            kAXSelectedTextRangeAttribute as CFString,
-            &selectedRangeValue
+            kAXSelectedTextRangesAttribute as CFString,
+            &selectedRangesValue
         ) == .success,
-            let selectedRangeValue
+            let selectedRanges = selectedRangesValue as? [AnyObject]
         else { return false }
 
-        guard CFGetTypeID(selectedRangeValue) == AXValueGetTypeID() else { return false }
+        for value in selectedRanges {
+            if let range = rangeValue(from: value), range.length > 0 {
+                return true
+            }
+        }
 
-        let axValue = unsafeBitCast(selectedRangeValue, to: AXValue.self)
-        guard AXValueGetType(axValue) == .cfRange else { return false }
-
-        var range = CFRange()
-        guard AXValueGetValue(axValue, .cfRange, &range) else { return false }
-
-        return range.length > 0
+        return false
     }
 
     // MARK: - Selected Text via Clipboard (fallback for Electron apps)
@@ -120,7 +127,6 @@ enum ActiveAppContextService {
     /// Used as fallback when AX `kAXSelectedTextAttribute` isn't supported (e.g. VSCode, Slack).
     static func selectedTextViaClipboard() -> String? {
         let pasteboard = NSPasteboard.general
-        let changeCount = pasteboard.changeCount
 
         // Save current clipboard contents
         let backup = pasteboard.pasteboardItems?.compactMap { item -> (String, Data)? in
@@ -132,6 +138,7 @@ enum ActiveAppContextService {
 
         // Clear clipboard so we can detect if Cmd+C actually wrote something
         pasteboard.clearContents()
+        let baselineChangeCount = pasteboard.changeCount
 
         // Simulate Cmd+C via CGEvent
         let source = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
@@ -146,15 +153,10 @@ enum ActiveAppContextService {
         keyDown.post(tap: CGEventTapLocation.cghidEventTap)
         keyUp.post(tap: CGEventTapLocation.cghidEventTap)
 
-        // Brief wait for the target app to process the copy command
-        usleep(50_000) // 50ms
-
-        // Read the result — only if clipboard actually changed
-        let copiedText: String? = if pasteboard.changeCount != changeCount {
-            pasteboard.string(forType: .string)
-        } else {
-            nil
-        }
+        let copiedText = waitForCopiedText(
+            on: pasteboard,
+            baselineChangeCount: baselineChangeCount
+        )
 
         // Restore original clipboard contents
         restoreClipboard(backup: backup)
@@ -169,6 +171,37 @@ enum ActiveAppContextService {
         for (typeRaw, data) in backup {
             pasteboard.setData(data, forType: NSPasteboard.PasteboardType(typeRaw))
         }
+    }
+
+    private static func waitForCopiedText(on pasteboard: NSPasteboard, baselineChangeCount: Int)
+        -> String?
+    {
+        for _ in 0 ..< 30 {
+            if pasteboard.changeCount != baselineChangeCount {
+                return pasteboard.string(forType: .string)
+            }
+            usleep(10_000) // 10ms
+        }
+        return nil
+    }
+
+    private static func rangeValue(from element: AXUIElement, attribute: CFString) -> CFRange? {
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
+              let value
+        else { return nil }
+        return rangeValue(from: value)
+    }
+
+    private static func rangeValue(from value: AnyObject) -> CFRange? {
+        guard CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+
+        let axValue = unsafeBitCast(value, to: AXValue.self)
+        guard AXValueGetType(axValue) == .cfRange else { return nil }
+
+        var range = CFRange()
+        guard AXValueGetValue(axValue, .cfRange, &range) else { return nil }
+        return range
     }
 
     private static func focusedElement(from pid: pid_t) -> AXUIElement? {
