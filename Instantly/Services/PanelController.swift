@@ -116,6 +116,12 @@ final class PanelController {
         guard state == .collapsed, let panel else { return }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
+        // Hotkey path injects context before toggle(); manual open does not.
+        // Capture here only when empty so we don't overwrite hotkey-captured context.
+        if expandedViewModel.contextItems.isEmpty {
+            expandedViewModel.setContext(ActiveAppContextService.captureContext())
+        }
+
         let expandedSize = CGSize(
             width: DesignTokens.expandedWidth,
             height: DesignTokens.expandedHeight
