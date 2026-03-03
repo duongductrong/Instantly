@@ -39,9 +39,14 @@ enum ActiveAppContextService {
             ))
         }
 
-        // Selected text chip (AX first, clipboard fallback for Electron apps like VSCode)
+        // Selected text chip (AX first, clipboard fallback only when a selection exists)
         if isAccessibilityGranted() {
-            let text = selectedText(from: app.processIdentifier) ?? selectedTextViaClipboard()
+            let pid = app.processIdentifier
+            let axSelectedText = selectedText(from: pid)
+            let shouldTryClipboardFallback = (axSelectedText?.isEmpty ?? true) && hasNonEmptySelection(
+                from: pid
+            )
+            let text = axSelectedText ?? (shouldTryClipboardFallback ? selectedTextViaClipboard() : nil)
             if let text, !text.isEmpty {
                 let truncated = text.count > 80
                     ? String(text.prefix(77)) + "..."
@@ -73,19 +78,7 @@ enum ActiveAppContextService {
     // MARK: - Selected Text via AXUIElement
 
     static func selectedText(from pid: pid_t) -> String? {
-        guard pid > 0 else { return nil }
-        let appElement = AXUIElementCreateApplication(pid)
-
-        var focusedElement: AnyObject?
-        guard AXUIElementCopyAttributeValue(
-            appElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedElement
-        ) == .success
-        else { return nil }
-
-        // swiftlint:disable:next force_cast
-        let element = focusedElement as! AXUIElement
+        guard let element = focusedElement(from: pid) else { return nil }
 
         var selectedValue: AnyObject?
         guard AXUIElementCopyAttributeValue(
@@ -96,6 +89,29 @@ enum ActiveAppContextService {
         else { return nil }
 
         return selectedValue as? String
+    }
+
+    static func hasNonEmptySelection(from pid: pid_t) -> Bool {
+        guard let element = focusedElement(from: pid) else { return false }
+
+        var selectedRangeValue: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &selectedRangeValue
+        ) == .success,
+            let selectedRangeValue
+        else { return false }
+
+        guard CFGetTypeID(selectedRangeValue) == AXValueGetTypeID() else { return false }
+
+        let axValue = unsafeBitCast(selectedRangeValue, to: AXValue.self)
+        guard AXValueGetType(axValue) == .cfRange else { return false }
+
+        var range = CFRange()
+        guard AXValueGetValue(axValue, .cfRange, &range) else { return false }
+
+        return range.length > 0
     }
 
     // MARK: - Selected Text via Clipboard (fallback for Electron apps)
@@ -153,5 +169,23 @@ enum ActiveAppContextService {
         for (typeRaw, data) in backup {
             pasteboard.setData(data, forType: NSPasteboard.PasteboardType(typeRaw))
         }
+    }
+
+    private static func focusedElement(from pid: pid_t) -> AXUIElement? {
+        guard pid > 0 else { return nil }
+
+        let appElement = AXUIElementCreateApplication(pid)
+        var focusedElement: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedElement
+        ) == .success,
+            let element = focusedElement
+        else { return nil }
+
+        guard CFGetTypeID(element) == AXUIElementGetTypeID() else { return nil }
+
+        return unsafeBitCast(element, to: AXUIElement.self)
     }
 }
