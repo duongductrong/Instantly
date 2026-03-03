@@ -105,11 +105,7 @@ struct BodyView: View {
             messageText(for: message)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(
-                    message.role == .user
-                        ? Color.accentColor.opacity(0.6)
-                        : Color.white.opacity(0.08)
-                )
+                .background(message.role.bubbleBackgroundColor)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .textSelection(.enabled)
         }
@@ -220,6 +216,7 @@ private struct ConversationMessageView<Content: View>: View {
                 .overlay(alignment: actionAlignment) {
                     if isHovered {
                         MessageActionsOverlay(
+                            backgroundColor: message.role.bubbleBackgroundColor,
                             isSpeaking: isSpeaking,
                             onCopy: onCopy,
                             onSpeak: onSpeak
@@ -247,6 +244,7 @@ private struct ConversationMessageView<Content: View>: View {
 }
 
 private struct MessageActionsOverlay: View {
+    let backgroundColor: Color
     let isSpeaking: Bool
     let onCopy: () -> Void
     let onSpeak: () -> Void
@@ -271,7 +269,7 @@ private struct MessageActionsOverlay: View {
             )
         }
         .padding(4)
-        .background(Color.black.opacity(0.34))
+        .background(backgroundColor)
         .overlay {
             Capsule()
                 .stroke(Color.white.opacity(0.16), lineWidth: 1)
@@ -296,6 +294,18 @@ private struct MessageActionsOverlay: View {
             withAnimation(.easeInOut(duration: 0.18)) {
                 didCopy = false
             }
+        }
+    }
+}
+
+private extension ChatMessage.Role {
+    var bubbleBackgroundColor: Color {
+        switch self {
+        case .user:
+            // .accentColor.opacity(0.6)
+            .white.opacity(0.08)
+        case .assistant, .system:
+            .white.opacity(0.08)
         }
     }
 }
