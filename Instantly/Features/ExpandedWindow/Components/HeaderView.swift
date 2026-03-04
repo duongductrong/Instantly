@@ -46,7 +46,7 @@ struct HeaderView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.6))
 
-                Button(action: { SettingsWindowController.shared.show() }) {
+                Button(action: { print("Hello world") }) {
                     Image(systemName: "gearshape")
                         .font(.system(size: 13))
                         .foregroundStyle(.white.opacity(0.6))
