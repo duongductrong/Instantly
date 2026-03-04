@@ -185,8 +185,19 @@ add_workflow_frontmatter() {
 
   # Check if file already has YAML frontmatter
   if echo "$content" | head -1 | grep -q '^---$'; then
-    # Already has frontmatter, copy as-is
-    safe_cp "$file" "$dest"
+    # Already has frontmatter — inject $ARGUMENTS after closing --- if not present
+    if ! echo "$content" | grep -q '\$ARGUMENTS'; then
+      # Insert $ARGUMENTS after the closing frontmatter ---
+      local new_content
+      new_content=$(echo "$content" | awk '
+        BEGIN { fm_count=0; injected=0 }
+        /^---$/ { fm_count++; print; if (fm_count == 2 && !injected) { print "$ARGUMENTS"; injected=1 } next }
+        { print }
+      ')
+      safe_write "$dest" "$new_content"
+    else
+      safe_cp "$file" "$dest"
+    fi
     verbose "  (already has frontmatter)"
     return
   fi
@@ -198,10 +209,11 @@ add_workflow_frontmatter() {
     title=$(basename "$file" .md | sed 's/-/ /g; s/\b\(.\)/\u\1/g')
   fi
 
-  # Build new content with frontmatter
+  # Build new content with frontmatter + $ARGUMENTS
   local new_content="---
 description: ${title}
 ---
+\$ARGUMENTS
 
 ${content}"
 
@@ -257,19 +269,31 @@ convert_command_to_workflow() {
   if echo "$content" | head -1 | grep -q '^---$'; then
     # Has frontmatter — check if 'description' exists
     if echo "$content" | head -10 | grep -q '^description:'; then
-      # Already has description in frontmatter, copy as-is
-      safe_cp "$file" "$dest"
+      # Already has description in frontmatter
+      # Inject $ARGUMENTS after closing --- if not already present
+      if ! echo "$content" | grep -q '\$ARGUMENTS'; then
+        local new_content
+        new_content=$(echo "$content" | awk '
+          BEGIN { fm_count=0; injected=0 }
+          /^---$/ { fm_count++; print; if (fm_count == 2 && !injected) { print "$ARGUMENTS"; injected=1 } next }
+          { print }
+        ')
+        safe_write "$dest" "$new_content"
+      else
+        safe_cp "$file" "$dest"
+      fi
       return
     fi
   fi
 
-  # Fallback: add description frontmatter
+  # Fallback: add description frontmatter + $ARGUMENTS
   local title
   title=$(echo "$content" | grep -m1 '^# ' | sed 's/^# //' || echo "$fname")
 
   local new_content="---
 description: ${title}
 ---
+\$ARGUMENTS
 
 ${content}"
 
@@ -294,24 +318,27 @@ if [[ -d "$CLAUDE_DIR/commands" ]]; then
     ((COMMANDS_CONVERTED++))
   done
 
-  # Process command subdirectories (e.g., commands/code/, commands/git/)
-  for cmd_subdir in "$CLAUDE_DIR/commands"/*/; do
-    [[ ! -d "$cmd_subdir" ]] && continue
-    subdir_name=$(basename "$cmd_subdir")
+  # Process command subdirectories recursively — FLATTEN into workflows/
+  # e.g., commands/fix/ci.md      → workflows/fix-ci.md
+  #        commands/cook/auto/fast.md → workflows/cook-auto-fast.md
+  while IFS= read -r cmd_file; do
+    [[ ! -f "$cmd_file" ]] && continue
 
-    # Create matching subdirectory in workflows
-    safe_mkdir "$AGENTS_DIR/workflows/$subdir_name"
+    # Build flattened name: strip commands/ prefix, replace / with -
+    rel_path="${cmd_file#$CLAUDE_DIR/commands/}"
+    flat_name=$(echo "$rel_path" | sed 's/\//-/g')
 
-    for cmd_file in "$cmd_subdir"*.md; do
-      [[ ! -f "$cmd_file" ]] && continue
-      fname=$(basename "$cmd_file")
-      dest="$AGENTS_DIR/workflows/$subdir_name/$fname"
+    # Avoid collision with existing top-level workflow of the same name
+    dest="$AGENTS_DIR/workflows/$flat_name"
+    if [[ -f "$dest" ]]; then
+      dest="$AGENTS_DIR/workflows/cmd-${flat_name}"
+      verbose "  Renamed to cmd-${flat_name} to avoid collision"
+    fi
 
-      convert_command_to_workflow "$cmd_file" "$dest"
-      success "Command → Workflow: $subdir_name/$fname"
-      ((COMMANDS_CONVERTED++))
-    done
-  done
+    convert_command_to_workflow "$cmd_file" "$dest"
+    success "Command → Workflow: $rel_path → $flat_name"
+    ((COMMANDS_CONVERTED++))
+  done < <(find "$CLAUDE_DIR/commands" -mindepth 2 -name '*.md' -type f | sort)
 else
   warn "No commands/ directory found in .claude"
 fi
