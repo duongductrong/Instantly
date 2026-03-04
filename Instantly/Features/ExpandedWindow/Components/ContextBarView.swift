@@ -164,25 +164,22 @@ private struct ContextAddButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: showLabel ? "plus.circle" : "plus")
-                    .font(.system(size: showLabel ? 12 : 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isHovered ? 0.78 : 0.58))
+            HStack(spacing: 4) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(isHovered ? 0.8 : 0.6))
+                    .frame(width: 15, height: 15)
 
                 if showLabel {
                     Text("Add context")
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(isHovered ? 0.7 : 0.5))
+                        .foregroundStyle(.white.opacity(isHovered ? 0.8 : 0.6))
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, showLabel ? 10 : 8)
+            .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(.white.opacity(isHovered ? 0.1 : 0.05))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(.white.opacity(isHovered ? 0.22 : 0.1), lineWidth: 1)
-            }
+            .background(.white.opacity(isHovered ? 0.14 : 0.09))
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
