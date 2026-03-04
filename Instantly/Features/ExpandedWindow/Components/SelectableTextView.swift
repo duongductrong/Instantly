@@ -200,6 +200,12 @@ enum MarkdownAttributedStringBuilder {
             buildDivider()
         case let .table(headers, rows):
             buildTable(headers: headers, rows: rows, textColor: textColor)
+        case let .unorderedList(items):
+            buildUnorderedList(items: items, baseFont: baseFont, textColor: textColor, lineSpacing: lineSpacing)
+        case let .orderedList(items):
+            buildOrderedList(items: items, baseFont: baseFont, textColor: textColor, lineSpacing: lineSpacing)
+        case let .blockquote(text):
+            buildBlockquote(text: text, baseFont: baseFont, textColor: textColor, lineSpacing: lineSpacing)
         }
     }
 
@@ -280,38 +286,235 @@ enum MarkdownAttributedStringBuilder {
         let result = NSMutableAttributedString()
         let columns = max(headers.count, rows.map(\.count).max() ?? 0)
 
-        // Header row
-        let headerText = headers.joined(separator: "  |  ")
-        let headerAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: textColor.withAlphaComponent(0.95),
-        ]
-        result.append(NSAttributedString(string: headerText + "\n", attributes: headerAttrs))
+        let headerFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        let cellFont = NSFont.systemFont(ofSize: 13)
+        let columnPadding: CGFloat = 20
 
-        // Separator
-        let separator = String(repeating: "─", count: columns * 12)
+        // Normalize row data so every row has `columns` entries
+        let allHeaders = (0 ..< columns).map { $0 < headers.count ? headers[$0] : "" }
+        let allRows = rows.map { row in
+            (0 ..< columns).map { $0 < row.count ? row[$0] : "" }
+        }
+
+        // Measure rendered width of each cell to compute column widths
+        var columnWidths: [CGFloat] = Array(repeating: 0, count: columns)
+        for (col, header) in allHeaders.enumerated() {
+            let w = parseInlineMarkdown(header, baseFont: headerFont, baseColor: textColor).size().width
+            columnWidths[col] = max(columnWidths[col], ceil(w))
+        }
+        for row in allRows {
+            for (col, cell) in row.enumerated() {
+                let w = parseInlineMarkdown(cell, baseFont: cellFont, baseColor: textColor).size().width
+                columnWidths[col] = max(columnWidths[col], ceil(w))
+            }
+        }
+
+        // Build tab stops at cumulative column positions
+        var tabStops: [NSTextTab] = []
+        var position: CGFloat = 0
+        for width in columnWidths {
+            tabStops.append(NSTextTab(textAlignment: .left, location: position))
+            position += width + columnPadding
+        }
+
+        let rowStyle = NSMutableParagraphStyle()
+        rowStyle.tabStops = tabStops
+        rowStyle.lineSpacing = 3
+
+        // Header row
+        let headerRow = buildTableRow(
+            allHeaders, font: headerFont,
+            color: textColor.withAlphaComponent(0.95),
+            style: rowStyle
+        )
+        result.append(headerRow)
+        result.append(NSAttributedString(string: "\n"))
+
+        // Separator line
+        let separatorLength = max(1, Int(position / 6))
+        let separator = String(repeating: "─", count: separatorLength)
         result.append(NSAttributedString(
             string: separator + "\n",
             attributes: [
-                .font: NSFont.systemFont(ofSize: 8),
+                .font: NSFont.systemFont(ofSize: 6),
                 .foregroundColor: textColor.withAlphaComponent(0.18),
             ]
         ))
 
         // Data rows
-        for (rowIndex, row) in rows.enumerated() {
-            let padded = (0 ..< columns).map { index in
-                index < row.count ? row[index] : ""
+        for (rowIndex, row) in allRows.enumerated() {
+            let dataRow = buildTableRow(
+                row, font: cellFont,
+                color: textColor.withAlphaComponent(0.88),
+                style: rowStyle
+            )
+            result.append(dataRow)
+            if rowIndex < allRows.count - 1 {
+                result.append(NSAttributedString(string: "\n"))
             }
-            let rowText = padded.joined(separator: "  |  ")
-            let rowAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 13),
-                .foregroundColor: textColor.withAlphaComponent(0.88),
-            ]
-            let suffix = rowIndex < rows.count - 1 ? "\n" : ""
-            result.append(NSAttributedString(string: rowText + suffix, attributes: rowAttrs))
         }
 
+        return result
+    }
+
+    private static func buildTableRow(
+        _ cells: [String],
+        font: NSFont,
+        color: NSColor,
+        style: NSParagraphStyle
+    )
+        -> NSAttributedString
+    {
+        let row = NSMutableAttributedString()
+        for (i, cell) in cells.enumerated() {
+            if i > 0 {
+                row.append(NSAttributedString(string: "\t", attributes: [.font: font]))
+            }
+            let cellAttr = parseInlineMarkdown(cell, baseFont: font, baseColor: color)
+            row.append(cellAttr)
+        }
+        row.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: row.length))
+        return row
+    }
+
+    private static func buildUnorderedList(
+        items: [ListItem],
+        baseFont: NSFont,
+        textColor: NSColor,
+        lineSpacing: CGFloat
+    )
+        -> NSAttributedString
+    {
+        let result = NSMutableAttributedString()
+
+        for (itemIndex, item) in items.enumerated() {
+            let baseIndent = CGFloat(item.indent) * 16 + 4
+            let bulletIndent: CGFloat = baseIndent + 16
+
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineSpacing = lineSpacing
+            paragraphStyle.firstLineHeadIndent = baseIndent
+            paragraphStyle.headIndent = bulletIndent
+            paragraphStyle.paragraphSpacing = 2
+
+            // Choose bullet: task checkbox or bullet dot
+            let bullet: String = if let isChecked = item.isChecked {
+                isChecked ? "☑ " : "☐ "
+            } else {
+                "•  "
+            }
+
+            let bulletAttrs: [NSAttributedString.Key: Any] = [
+                .font: baseFont,
+                .foregroundColor: textColor.withAlphaComponent(0.5),
+                .paragraphStyle: paragraphStyle,
+            ]
+            result.append(NSAttributedString(string: bullet, attributes: bulletAttrs))
+
+            let inlineText = parseInlineMarkdown(
+                item.text,
+                baseFont: baseFont,
+                baseColor: textColor.withAlphaComponent(0.95)
+            )
+            let mutableInline = NSMutableAttributedString(attributedString: inlineText)
+            mutableInline.addAttribute(
+                .paragraphStyle,
+                value: paragraphStyle,
+                range: NSRange(location: 0, length: mutableInline.length)
+            )
+            result.append(mutableInline)
+
+            if itemIndex < items.count - 1 {
+                result.append(NSAttributedString(string: "\n"))
+            }
+        }
+
+        return result
+    }
+
+    private static func buildOrderedList(
+        items: [ListItem],
+        baseFont: NSFont,
+        textColor: NSColor,
+        lineSpacing: CGFloat
+    )
+        -> NSAttributedString
+    {
+        let result = NSMutableAttributedString()
+
+        for (itemIndex, item) in items.enumerated() {
+            let baseIndent = CGFloat(item.indent) * 16 + 4
+            let numberIndent: CGFloat = baseIndent + 22
+
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineSpacing = lineSpacing
+            paragraphStyle.firstLineHeadIndent = baseIndent
+            paragraphStyle.headIndent = numberIndent
+            paragraphStyle.paragraphSpacing = 2
+
+            let number = "\(itemIndex + 1). "
+            let numberAttrs: [NSAttributedString.Key: Any] = [
+                .font: baseFont,
+                .foregroundColor: textColor.withAlphaComponent(0.5),
+                .paragraphStyle: paragraphStyle,
+            ]
+            result.append(NSAttributedString(string: number, attributes: numberAttrs))
+
+            let inlineText = parseInlineMarkdown(
+                item.text,
+                baseFont: baseFont,
+                baseColor: textColor.withAlphaComponent(0.95)
+            )
+            let mutableInline = NSMutableAttributedString(attributedString: inlineText)
+            mutableInline.addAttribute(
+                .paragraphStyle,
+                value: paragraphStyle,
+                range: NSRange(location: 0, length: mutableInline.length)
+            )
+            result.append(mutableInline)
+
+            if itemIndex < items.count - 1 {
+                result.append(NSAttributedString(string: "\n"))
+            }
+        }
+
+        return result
+    }
+
+    private static func buildBlockquote(
+        text: String,
+        baseFont: NSFont,
+        textColor: NSColor,
+        lineSpacing: CGFloat
+    )
+        -> NSAttributedString
+    {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = lineSpacing
+        paragraphStyle.firstLineHeadIndent = 16
+        paragraphStyle.headIndent = 16
+        paragraphStyle.paragraphSpacing = 2
+
+        let bar = NSAttributedString(
+            string: "▎ ",
+            attributes: [
+                .font: baseFont,
+                .foregroundColor: textColor.withAlphaComponent(0.25),
+                .paragraphStyle: paragraphStyle,
+            ]
+        )
+
+        let inlineText = parseInlineMarkdown(text, baseFont: baseFont, baseColor: textColor.withAlphaComponent(0.72))
+        let mutableInline = NSMutableAttributedString(attributedString: inlineText)
+        mutableInline.addAttribute(
+            .paragraphStyle,
+            value: paragraphStyle,
+            range: NSRange(location: 0, length: mutableInline.length)
+        )
+
+        let result = NSMutableAttributedString()
+        result.append(bar)
+        result.append(mutableInline)
         return result
     }
 
