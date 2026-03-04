@@ -45,9 +45,9 @@ struct InputBarView: View {
                     Button(action: { viewModel.stopGenerating() }) {
                         Image(systemName: "stop.fill")
                             .font(.system(size: 11))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.white.opacity(0.7))
                             .frame(width: actionButtonSize, height: actionButtonSize)
-                            .background(Color.red.opacity(0.7))
+                            .background(Color.white.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
