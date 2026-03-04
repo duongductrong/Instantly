@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct BodyView: View {
@@ -103,7 +104,6 @@ struct BodyView: View {
             isSpeaking: viewModel.isMessageSpeaking(message)
         ) {
             messageContent(for: message)
-                .textSelection(.enabled)
                 .shimmering(isActive: shouldShimmer(message))
         }
     }
@@ -129,10 +129,13 @@ struct BodyView: View {
             AssistantMarkdownView(content: displayContent)
                 .foregroundStyle(.primary)
         } else {
-            Text(displayContent)
-                .font(.system(size: 14))
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
+            SelectableTextBlock(
+                attributedString: MarkdownAttributedStringBuilder.buildPlainText(
+                    displayContent,
+                    font: .systemFont(ofSize: 14),
+                    textColor: .labelColor
+                )
+            )
         }
     }
 
