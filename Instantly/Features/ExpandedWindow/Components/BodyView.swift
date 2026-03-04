@@ -62,7 +62,7 @@ struct BodyView: View {
             Spacer().frame(height: 20)
             Text("What can I help with?")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.primary.opacity(0.5))
 
             HStack(spacing: 8) {
                 ForEach(suggestionChips, id: \.self) { chip in
@@ -72,10 +72,10 @@ struct BodyView: View {
                     } label: {
                         Text(chip)
                             .font(.system(size: 12))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.primary.opacity(0.7))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.08))
+                            .background(Color.primary.opacity(0.08))
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                     .buttonStyle(.plain)
@@ -127,11 +127,11 @@ struct BodyView: View {
 
         if message.role == .assistant {
             AssistantMarkdownView(content: displayContent)
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
         } else {
             Text(displayContent)
                 .font(.system(size: 14))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .textSelection(.enabled)
         }
     }
@@ -152,11 +152,11 @@ struct BodyView: View {
 
                     Text(attachment.filename)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.primary.opacity(0.8))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color.white.opacity(0.1))
+                .background(Color.primary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -169,12 +169,12 @@ struct BodyView: View {
             if viewModel.isLoading {
                 ProgressView()
                     .controlSize(.small)
-                    .tint(.white)
+                    .tint(.primary)
             }
 
             Text(viewModel.statusMessage)
                 .font(.system(size: 13))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.primary.opacity(0.6))
         }
     }
 
@@ -286,7 +286,7 @@ private struct MessageActionsOverlay: View {
         .background(backgroundColor)
         .overlay {
             Capsule()
-                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.16), lineWidth: 1)
         }
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
@@ -317,9 +317,9 @@ private extension ChatMessage.Role {
         switch self {
         case .user:
             // .accentColor.opacity(0.6)
-            .white.opacity(0.08)
+            .primary.opacity(0.08)
         case .assistant, .system:
-            .white.opacity(0.08)
+            .primary.opacity(0.08)
         }
     }
 }
@@ -338,9 +338,9 @@ private struct MessageActionIconButton: View {
                 .font(.system(size: 9, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: isActive)
-                .foregroundStyle(.white.opacity(isHovered || isActive ? 0.95 : 0.72))
+                .foregroundStyle(.primary.opacity(isHovered || isActive ? 0.95 : 0.72))
                 .frame(width: 24, height: 24)
-                .background(.white.opacity(isHovered || isActive ? 0.16 : 0.08))
+                .background(.primary.opacity(isHovered || isActive ? 0.16 : 0.08))
                 .clipShape(Circle())
                 .scaleEffect(isHovered ? 1.04 : 1.0)
         }
@@ -367,13 +367,13 @@ private struct MessageActionTooltip: View {
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.white.opacity(0.9))
+            .foregroundStyle(.primary.opacity(0.9))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Color.black.opacity(0.82))
             .overlay {
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .fixedSize()

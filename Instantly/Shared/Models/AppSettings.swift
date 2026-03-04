@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import Foundation
+import SwiftUI
 
 struct AppSettings: Codable, Equatable {
     static let currentSchemaVersion = 1
@@ -85,15 +86,51 @@ struct ModelSettings: Codable, Equatable {
     }
 }
 
+enum AppearanceMode: String, Codable, CaseIterable, Identifiable {
+    case auto
+    case light
+    case dark
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .auto: "Auto"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    var resolvedColorScheme: ColorScheme? {
+        switch self {
+        case .auto: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    var resolvedAppearance: NSAppearance? {
+        switch self {
+        case .auto: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 struct SystemSettings: Codable, Equatable {
     var launchAtLogin: Bool
     var globalHotkey: HotkeyBinding
     var showPanelOnAppLaunch: Bool
+    var appearanceMode: AppearanceMode
 
     static let defaultValue = SystemSettings(
         launchAtLogin: false,
         globalHotkey: .commandComma,
-        showPanelOnAppLaunch: true
+        showPanelOnAppLaunch: true,
+        appearanceMode: .auto
     )
 }
 

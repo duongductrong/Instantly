@@ -14,7 +14,7 @@ struct InputBarView: View {
     }
 
     private var submitButtonBackground: Color {
-        colorScheme == .dark ? .white : .black
+        .primary
     }
 
     private var submitIconColor: Color {
@@ -24,14 +24,14 @@ struct InputBarView: View {
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-                .background(Color.white.opacity(0.15))
+                .background(Color.primary.opacity(0.15))
 
             HStack(alignment: .center, spacing: 10) {
                 MultiLineTextView(
                     text: $viewModel.queryText,
                     placeholder: "Ask anything...",
                     font: .systemFont(ofSize: 14),
-                    textColor: .white,
+                    textColor: .labelColor,
                     maxHeight: maxInputHeight,
                     onSubmit: {
                         viewModel.sendMessage()
@@ -45,9 +45,9 @@ struct InputBarView: View {
                     Button(action: { viewModel.stopGenerating() }) {
                         Image(systemName: "stop.fill")
                             .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.primary.opacity(0.7))
                             .frame(width: actionButtonSize, height: actionButtonSize)
-                            .background(Color.white.opacity(0.1))
+                            .background(Color.primary.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -55,9 +55,9 @@ struct InputBarView: View {
                     Button(action: {}) {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.primary.opacity(0.7))
                             .frame(width: actionButtonSize, height: actionButtonSize)
-                            .background(Color.white.opacity(0.1))
+                            .background(Color.primary.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -69,9 +69,9 @@ struct InputBarView: View {
                     }) {
                         Image(systemName: hasInputText ? "arrow.up" : "at")
                             .font(.system(size: 13, weight: hasInputText ? .semibold : .regular))
-                            .foregroundStyle(hasInputText ? submitIconColor : .white.opacity(0.7))
+                            .foregroundStyle(hasInputText ? submitIconColor : .primary.opacity(0.7))
                             .frame(width: actionButtonSize, height: actionButtonSize)
-                            .background(hasInputText ? submitButtonBackground : Color.white.opacity(0.1))
+                            .background(hasInputText ? submitButtonBackground : Color.primary.opacity(0.1))
                             .clipShape(Circle())
                             .contentTransition(.symbolEffect(.replace))
                     }

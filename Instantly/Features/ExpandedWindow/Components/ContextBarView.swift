@@ -12,13 +12,13 @@ struct ContextChipView: View {
             chipIcon
             Text(item.type == .selectedText ? "Selected Text" : item.label)
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.primary.opacity(0.8))
                 .lineLimit(1)
             if let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.primary.opacity(0.6))
                 }
                 .buttonStyle(.plain)
                 .frame(width: 16, height: 16)
@@ -27,7 +27,7 @@ struct ContextChipView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background(.white.opacity(0.09))
+        .background(.primary.opacity(0.09))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .onHover { hovering in
             if item.type == .selectedText {
@@ -73,7 +73,7 @@ struct ContextChipView: View {
         case .selectedText:
             Image(systemName: "doc.text")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(.primary.opacity(0.7))
                 .frame(width: 14, height: 14)
         }
     }
@@ -167,19 +167,19 @@ private struct ContextAddButton: View {
             HStack(spacing: 4) {
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isHovered ? 0.8 : 0.6))
+                    .foregroundStyle(.primary.opacity(isHovered ? 0.8 : 0.6))
                     .frame(width: 15, height: 15)
 
                 if showLabel {
                     Text("Add context")
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(isHovered ? 0.8 : 0.6))
+                        .foregroundStyle(.primary.opacity(isHovered ? 0.8 : 0.6))
                         .lineLimit(1)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(.white.opacity(isHovered ? 0.14 : 0.09))
+            .background(.primary.opacity(isHovered ? 0.14 : 0.09))
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
@@ -205,18 +205,18 @@ private struct ContextAddMenuRow: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isEnabled ? 0.75 : 0.3))
+                    .foregroundStyle(.primary.opacity(isEnabled ? 0.75 : 0.3))
                     .frame(width: 14, height: 14)
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(isEnabled ? 0.9 : 0.45))
+                        .foregroundStyle(.primary.opacity(isEnabled ? 0.9 : 0.45))
 
                     Text(subtitle)
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(isEnabled ? 0.6 : 0.35))
+                        .foregroundStyle(.primary.opacity(isEnabled ? 0.6 : 0.35))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -224,7 +224,7 @@ private struct ContextAddMenuRow: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .background(isHovered && isEnabled ? .white.opacity(0.08) : .clear)
+            .background(isHovered && isEnabled ? Color.primary.opacity(0.08) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.plain)

@@ -15,7 +15,9 @@ struct ExpandedWindowView: View {
             width: viewModel.expandedWidth,
             height: DesignTokens.expandedHeight
         )
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(
+            SettingsService.shared.settings.system.appearanceMode.resolvedColorScheme
+        )
         .onAppear {
             installNewChatShortcutMonitor()
         }

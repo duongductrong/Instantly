@@ -6,8 +6,8 @@ struct MultiLineTextView: NSViewRepresentable {
     @Binding var text: String
     var placeholder: String = ""
     var font: NSFont = .systemFont(ofSize: 14)
-    var textColor: NSColor = .white
-    var placeholderColor: NSColor = .white.withAlphaComponent(0.4)
+    var textColor: NSColor = .labelColor
+    var placeholderColor: NSColor = .placeholderTextColor
     var maxHeight: CGFloat = 120
     var onSubmit: (() -> Void)?
 
@@ -37,7 +37,7 @@ struct MultiLineTextView: NSViewRepresentable {
         textView.onSubmit = onSubmit
         textView.font = font
         textView.textColor = textColor
-        textView.insertionPointColor = .white
+        textView.insertionPointColor = textColor
         textView.backgroundColor = .clear
         textView.drawsBackground = false
         textView.isRichText = false

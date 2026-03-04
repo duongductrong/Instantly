@@ -34,6 +34,8 @@ final class SettingsWindowController {
         newWindow.isReleasedWhenClosed = false
         newWindow.delegate = WindowCloseDelegate.shared
 
+        newWindow.appearance = SettingsService.shared.settings.system.appearanceMode.resolvedAppearance
+
         window = newWindow
         newWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

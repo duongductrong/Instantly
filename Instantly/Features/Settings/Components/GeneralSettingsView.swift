@@ -6,6 +6,14 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
+                AppearanceModePicker(
+                    selectedMode: settingsService.settings.system.appearanceMode,
+                    onSelect: { mode in
+                        settingsService.updateSystem { $0.appearanceMode = mode }
+                        applyAppearance(mode)
+                    }
+                )
+
                 HStack {
                     Text("Keyboard shortcut")
                     Spacer()
@@ -49,6 +57,13 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            applyAppearance(settingsService.settings.system.appearanceMode)
+        }
+    }
+
+    private func applyAppearance(_ mode: AppearanceMode) {
+        NSApp.appearance = mode.resolvedAppearance
     }
 }
 
