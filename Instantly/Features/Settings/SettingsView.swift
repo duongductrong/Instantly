@@ -14,6 +14,7 @@ struct SettingsView: View {
                 selectedSectionContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
             .navigationSplitViewStyle(.balanced)
             .toolbar(.hidden, for: .windowToolbar)
             .ignoresSafeArea(.container, edges: .top)

@@ -23,6 +23,7 @@ final class PanelController {
     private var hotKeyHandlerRef: EventHandlerRef?
     private var hasRequestedAXPermission = false
     private var activeHotkeyBinding: HotkeyBinding?
+    private var collapseHideWorkItem: DispatchWorkItem?
 
     private init() {}
 
@@ -51,9 +52,20 @@ final class PanelController {
     // MARK: - Panel Lifecycle
 
     func show() {
+        collapseHideWorkItem?.cancel()
+        collapseHideWorkItem = nil
+
         guard panel == nil else {
-            panel?.orderFront(nil)
+            guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+            let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
+            let origin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
+            let frame = NSRect(origin: origin, size: pillSize)
+            panel?.setFrame(frame, display: true)
+            panel?.updateCornerRadius(DesignTokens.pillCornerRadius)
+            panel?.orderOut(nil)
             state = .collapsed
+            contentViewModel.isExpanded = false
+            contentViewModel.showContent = false
             return
         }
 
@@ -67,7 +79,7 @@ final class PanelController {
 
         newPanel.setFrame(frame, display: true)
         newPanel.updateCornerRadius(DesignTokens.pillCornerRadius)
-        newPanel.orderFront(nil)
+        newPanel.orderOut(nil)
 
         panel = newPanel
         state = .collapsed
@@ -76,6 +88,9 @@ final class PanelController {
     }
 
     func hide() {
+        collapseHideWorkItem?.cancel()
+        collapseHideWorkItem = nil
+
         stopMouseMonitor()
         stopEscMonitor()
         expandedViewModel.clearContext()
@@ -103,6 +118,8 @@ final class PanelController {
     func expand() {
         guard state == .collapsed, let panel else { return }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        collapseHideWorkItem?.cancel()
+        collapseHideWorkItem = nil
 
         // Hotkey path injects context before toggle(); manual open does not.
         // Capture here only when empty so we don't overwrite hotkey-captured context.
@@ -117,13 +134,13 @@ final class PanelController {
         )
         let expandedFrame = NSRect(origin: expandedOrigin, size: expandedSize)
 
+        panel.orderFront(nil)
+        contentViewModel.expand()
         panel.animateFrame(
             to: expandedFrame,
             cornerRadius: DesignTokens.panelCornerRadius,
             duration: DesignTokens.slideUpDuration
         )
-
-        contentViewModel.expand()
         state = .expanded
         panel.makeKeyAndOrderFront(nil)
 
@@ -152,6 +169,9 @@ final class PanelController {
 
     func collapse() {
         guard state == .expanded, let panel else { return }
+        collapseHideWorkItem?.cancel()
+        collapseHideWorkItem = nil
+
         stopMouseMonitor()
         stopEscMonitor()
 
@@ -168,6 +188,15 @@ final class PanelController {
                 to: pillFrame,
                 cornerRadius: DesignTokens.pillCornerRadius,
                 duration: DesignTokens.slideDownDuration
+            )
+            let hideWorkItem = DispatchWorkItem { [weak self] in
+                guard let self, state == .collapsed else { return }
+                panel.orderOut(nil)
+            }
+            self.collapseHideWorkItem = hideWorkItem
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + DesignTokens.slideDownDuration,
+                execute: hideWorkItem
             )
         }
 
@@ -301,6 +330,7 @@ final class PanelController {
             let pillSize = CGSize(width: DesignTokens.pillWidth, height: DesignTokens.pillHeight)
             let origin = ScreenPositionService.pillOrigin(screen: screen, pillSize: pillSize)
             panel.setFrame(NSRect(origin: origin, size: pillSize), display: true)
+            panel.updateCornerRadius(DesignTokens.pillCornerRadius)
         } else {
             let expandedSize = currentExpandedSize()
             let expandedOrigin = ScreenPositionService.expandedOrigin(
@@ -308,6 +338,7 @@ final class PanelController {
                 expandedSize: expandedSize
             )
             panel.setFrame(NSRect(origin: expandedOrigin, size: expandedSize), display: true)
+            panel.updateCornerRadius(DesignTokens.panelCornerRadius)
         }
     }
 
