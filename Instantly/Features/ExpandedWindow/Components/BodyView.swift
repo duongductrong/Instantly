@@ -102,18 +102,28 @@ struct BodyView: View {
             onSpeak: { viewModel.toggleSpeakMessageContent(message) },
             isSpeaking: viewModel.isMessageSpeaking(message)
         ) {
+            messageContent(for: message)
+                .textSelection(.enabled)
+                .shimmering(isActive: shouldShimmer(message))
+        }
+    }
+
+    @ViewBuilder
+    private func messageContent(for message: ChatMessage) -> some View {
+        if message.role == .assistant {
+            messageText(for: message)
+        } else {
             messageText(for: message)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(message.role.bubbleBackgroundColor)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .textSelection(.enabled)
         }
     }
 
     @ViewBuilder
     private func messageText(for message: ChatMessage) -> some View {
-        let displayContent = message.content.isEmpty && message.role == .assistant ? "..." : message.content
+        let displayContent = message.content.isEmpty && message.role == .assistant ? "Thinking" : message.content
 
         if message.role == .assistant {
             AssistantMarkdownView(content: displayContent)
@@ -124,6 +134,10 @@ struct BodyView: View {
                 .foregroundStyle(.white)
                 .textSelection(.enabled)
         }
+    }
+
+    private func shouldShimmer(_ message: ChatMessage) -> Bool {
+        viewModel.isLoading && message.role == .assistant && message.id == viewModel.messages.last?.id
     }
 
     // MARK: - Attachments
@@ -364,5 +378,47 @@ private struct MessageActionTooltip: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .fixedSize()
             .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Shimmer Effect
+
+private struct ShimmerModifier: ViewModifier {
+    let isActive: Bool
+    @State private var isAnimating = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isActive ? 0.4 : 1.0)
+            .overlay {
+                if isActive {
+                    GeometryReader { proxy in
+                        let width = proxy.size.width
+                        let height = proxy.size.height
+
+                        LinearGradient(
+                            colors: [.clear, .primary.opacity(0.9), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(width: width * 1.5, height: height * 1.4)
+                        .rotationEffect(.degrees(20))
+                        .offset(x: isAnimating ? width : -width)
+                        .onAppear {
+                            isAnimating = false
+                            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                                isAnimating = true
+                            }
+                        }
+                    }
+                    .mask(content)
+                }
+            }
+    }
+}
+
+private extension View {
+    func shimmering(isActive: Bool = true) -> some View {
+        modifier(ShimmerModifier(isActive: isActive))
     }
 }
