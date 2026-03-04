@@ -183,7 +183,7 @@ enum MarkdownAttributedStringBuilder {
 
     // MARK: - Block builders
 
-    private static func buildBlock(
+    static func buildBlock(
         _ block: AssistantMarkdownBlock,
         baseFont: NSFont,
         textColor: NSColor,
