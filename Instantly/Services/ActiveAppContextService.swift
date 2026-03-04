@@ -39,16 +39,18 @@ enum ActiveAppContextService {
             ))
         }
 
-        // Selected text chip (AX first, clipboard fallback only when a selection exists)
+        // Selected text chip (AX first, clipboard fallback for Electron/non-AX apps)
         if isAccessibilityGranted() {
             let pid = app.processIdentifier
             let axSelectedText = selectedText(from: pid)
-            let shouldTryClipboardFallback = (axSelectedText?.isEmpty ?? true)
-                && hasNonEmptySelection(from: pid)
+            let axFailed = (axSelectedText?.isEmpty ?? true)
+            let isElectronLike = requiresClipboardFallback(bundleID: app.bundleIdentifier)
+            let shouldTryClipboardFallback = axFailed
+                && (isElectronLike || hasNonEmptySelection(from: pid))
             let text: String? = if let axSelectedText, !axSelectedText.isEmpty {
                 axSelectedText
             } else if shouldTryClipboardFallback {
-                selectedTextViaClipboard()
+                selectedTextViaClipboard(forBundleID: app.bundleIdentifier, pid: pid)
             } else {
                 nil
             }
@@ -121,26 +123,100 @@ enum ActiveAppContextService {
         return false
     }
 
-    // MARK: - Selected Text via Clipboard (fallback for Electron apps)
+    // MARK: - Electron / Non-AX App Detection
 
-    /// Simulates Cmd+C to copy selected text, reads the clipboard, then restores original contents.
-    /// Used as fallback when AX `kAXSelectedTextAttribute` isn't supported (e.g. VSCode, Slack).
-    static func selectedTextViaClipboard() -> String? {
-        let pasteboard = NSPasteboard.general
+    /// Known bundle identifiers for apps that don't support AX selected text attributes.
+    /// These apps require the clipboard fallback (Cmd+C simulation) to capture selected text.
+    private static let clipboardFallbackBundleIDs: Set<String> = [
+        "com.microsoft.VSCode",
+        "com.microsoft.VSCodeInsiders",
+        "com.visualstudio.code.oss", // VSCodium
+        "com.slack.Slack",
+        "com.discord.Discord",
+        "com.spotify.client",
+        "com.brave.Browser",
+    ]
 
-        // Save current clipboard contents
-        let backup = pasteboard.pasteboardItems?.compactMap { item -> (String, Data)? in
-            guard let type = item.types.first,
-                  let data = item.data(forType: type)
-            else { return nil }
-            return (type.rawValue, data)
+    private static func requiresClipboardFallback(bundleID: String?) -> Bool {
+        guard let bundleID else { return false }
+        return clipboardFallbackBundleIDs.contains(bundleID)
+    }
+
+    /// Detect whether the focused AX element is a terminal pane.
+    /// VSCode terminals use Cmd+Shift+C for copy instead of Cmd+C.
+    private static func isFocusedElementTerminal(pid: pid_t) -> Bool {
+        guard let element = focusedElement(from: pid) else { return false }
+
+        var roleValue: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXRoleAttribute as CFString,
+            &roleValue
+        ) == .success,
+            let role = roleValue as? String
+        else { return false }
+
+        // Check role and role description for terminal indicators
+        if role == "AXGroup" || role == "AXTextArea" {
+            var descriptionValue: AnyObject?
+            if AXUIElementCopyAttributeValue(
+                element,
+                kAXRoleDescriptionAttribute as CFString,
+                &descriptionValue
+            ) == .success,
+                let desc = descriptionValue as? String
+            {
+                let lowered = desc.lowercased()
+                if lowered.contains("terminal") || lowered.contains("xterm") {
+                    return true
+                }
+            }
+
+            // Also check the AX description/title for terminal hints
+            var titleValue: AnyObject?
+            if AXUIElementCopyAttributeValue(
+                element,
+                kAXDescriptionAttribute as CFString,
+                &titleValue
+            ) == .success,
+                let title = titleValue as? String
+            {
+                let lowered = title.lowercased()
+                if lowered.contains("terminal") || lowered.contains("xterm") {
+                    return true
+                }
+            }
         }
 
-        // Clear clipboard so we can detect if Cmd+C actually wrote something
+        return false
+    }
+
+    // MARK: - Selected Text via Clipboard (fallback for Electron apps)
+
+    /// Simulates Cmd+C (or Cmd+Shift+C for terminals) to copy selected text,
+    /// reads the clipboard, then restores original contents.
+    /// Used as fallback when AX `kAXSelectedTextAttribute` isn't supported (e.g. VSCode, Slack).
+    static func selectedTextViaClipboard(forBundleID bundleID: String? = nil, pid: pid_t = 0) -> String? {
+        let pasteboard = NSPasteboard.general
+
+        // Save ALL clipboard contents (all types per item) for faithful restore
+        let backup: [[(String, Data)]] = pasteboard.pasteboardItems?.map { item in
+            item.types.compactMap { type in
+                guard let data = item.data(forType: type) else { return nil }
+                return (type.rawValue, data)
+            }
+        } ?? []
+
+        // Clear clipboard so we can detect if the copy actually wrote something
         pasteboard.clearContents()
         let baselineChangeCount = pasteboard.changeCount
 
-        // Simulate Cmd+C via CGEvent
+        // Determine whether to use Cmd+Shift+C (terminal) or Cmd+C (editor)
+        let useShiftModifier = requiresClipboardFallback(bundleID: bundleID)
+            && pid > 0
+            && isFocusedElementTerminal(pid: pid)
+
+        // Simulate the copy keystroke via CGEvent
         let source = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
@@ -148,14 +224,22 @@ enum ActiveAppContextService {
             restoreClipboard(backup: backup)
             return nil
         }
-        keyDown.flags = CGEventFlags.maskCommand
-        keyUp.flags = CGEventFlags.maskCommand
+
+        var flags: CGEventFlags = .maskCommand
+        if useShiftModifier {
+            flags.insert(.maskShift)
+        }
+        keyDown.flags = flags
+        keyUp.flags = flags
         keyDown.post(tap: CGEventTapLocation.cghidEventTap)
         keyUp.post(tap: CGEventTapLocation.cghidEventTap)
 
+        // Electron apps can be slower to handle copy — use longer wait
+        let maxAttempts = requiresClipboardFallback(bundleID: bundleID) ? 50 : 30
         let copiedText = waitForCopiedText(
             on: pasteboard,
-            baselineChangeCount: baselineChangeCount
+            baselineChangeCount: baselineChangeCount,
+            maxAttempts: maxAttempts
         )
 
         // Restore original clipboard contents
@@ -164,19 +248,28 @@ enum ActiveAppContextService {
         return copiedText
     }
 
-    private static func restoreClipboard(backup: [(String, Data)]?) {
+    private static func restoreClipboard(backup: [[(String, Data)]]) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        guard let backup, !backup.isEmpty else { return }
-        for (typeRaw, data) in backup {
-            pasteboard.setData(data, forType: NSPasteboard.PasteboardType(typeRaw))
+        guard !backup.isEmpty else { return }
+        for itemTypes in backup {
+            guard !itemTypes.isEmpty else { continue }
+            let pasteboardItem = NSPasteboardItem()
+            for (typeRaw, data) in itemTypes {
+                pasteboardItem.setData(data, forType: NSPasteboard.PasteboardType(typeRaw))
+            }
+            pasteboard.writeObjects([pasteboardItem])
         }
     }
 
-    private static func waitForCopiedText(on pasteboard: NSPasteboard, baselineChangeCount: Int)
+    private static func waitForCopiedText(
+        on pasteboard: NSPasteboard,
+        baselineChangeCount: Int,
+        maxAttempts: Int = 30
+    )
         -> String?
     {
-        for _ in 0 ..< 30 {
+        for _ in 0 ..< maxAttempts {
             if pasteboard.changeCount != baselineChangeCount {
                 return pasteboard.string(forType: .string)
             }
