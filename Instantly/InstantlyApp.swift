@@ -7,7 +7,8 @@ struct InstantlyApp: App {
     var body: some Scene {
         // No visible windows — panel managed by PanelController
         Settings {
-            EmptyView()
+            SettingsView()
+                .frame(minWidth: 600, minHeight: 400)
         }
     }
 }
