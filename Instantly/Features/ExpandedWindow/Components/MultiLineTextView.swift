@@ -12,6 +12,7 @@ struct MultiLineTextView: NSViewRepresentable {
     var onSubmit: (() -> Void)?
 
     @Binding var dynamicHeight: CGFloat
+    @Binding var shouldFocus: Bool
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -78,6 +79,14 @@ struct MultiLineTextView: NSViewRepresentable {
 
         // Update placeholder visibility
         context.coordinator.updatePlaceholder()
+
+        // Focus on demand
+        if shouldFocus {
+            DispatchQueue.main.async {
+                textView.window?.makeFirstResponder(textView)
+                shouldFocus = false
+            }
+        }
     }
 
     // MARK: - Coordinator

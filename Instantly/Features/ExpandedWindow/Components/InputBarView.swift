@@ -36,7 +36,8 @@ struct InputBarView: View {
                     onSubmit: {
                         viewModel.sendMessage()
                     },
-                    dynamicHeight: $textHeight
+                    dynamicHeight: $textHeight,
+                    shouldFocus: $viewModel.shouldFocusInput
                 )
                 .frame(height: textHeight)
                 .animation(.easeOut(duration: 0.15), value: textHeight)

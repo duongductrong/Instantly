@@ -1,6 +1,14 @@
 import AppKit
 import SwiftUI
 
+/// An NSTextView subclass that allows text selection but refuses to steal
+/// keyboard focus from other responders (e.g. the input bar).
+final class NonStealingTextView: NSTextView {
+    override var acceptsFirstResponder: Bool {
+        false
+    }
+}
+
 /// An NSViewRepresentable wrapper around NSTextView that enables native
 /// multi-line text selection for read-only content on macOS.
 /// The view expands to fit all content — no internal scrolling.
@@ -18,8 +26,8 @@ struct SelectableText: NSViewRepresentable {
         Coordinator(self)
     }
 
-    func makeNSView(context: Context) -> NSTextView {
-        let textView = NSTextView()
+    func makeNSView(context: Context) -> NonStealingTextView {
+        let textView = NonStealingTextView()
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
@@ -48,7 +56,7 @@ struct SelectableText: NSViewRepresentable {
         return textView
     }
 
-    func updateNSView(_ textView: NSTextView, context: Context) {
+    func updateNSView(_ textView: NonStealingTextView, context: Context) {
         let storage = textView.textStorage!
         storage.beginEditing()
         storage.setAttributedString(attributedString)

@@ -11,6 +11,7 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
     var contextItems: [ContextItem] = []
     var messages: [ChatMessage] = []
     var speakingMessageID: UUID?
+    var shouldFocusInput: Bool = false
 
     private var streamTask: Task<Void, Never>?
     private var capturedContextItems: [ContextItem] = []
@@ -109,6 +110,7 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
         )
 
         queryText = ""
+        requestInputFocus()
         statusMessage = ""
         messages.append(ChatMessage(role: .user, content: text))
         messages.append(ChatMessage(role: .assistant, content: ""))
@@ -158,6 +160,11 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
         stopSpeaking()
         messages.removeAll()
         statusMessage = ""
+        requestInputFocus()
+    }
+
+    func requestInputFocus() {
+        shouldFocusInput = true
     }
 
     func copyMessageContent(_ message: ChatMessage) {

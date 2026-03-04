@@ -144,6 +144,11 @@ final class PanelController {
         state = .expanded
         panel.makeKeyAndOrderFront(nil)
 
+        // Focus the input bar after the panel is ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.expandedViewModel.requestInputFocus()
+        }
+
         startMouseMonitor()
         startEscMonitor()
     }
