@@ -114,7 +114,6 @@ struct BodyView: View {
             messageText(for: message)
         } else {
             messageText(for: message)
-                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(message.role.bubbleBackgroundColor)
