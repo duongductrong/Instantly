@@ -23,6 +23,20 @@ struct InputBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Autocomplete popup (appears above the input bar)
+            if viewModel.showAutocomplete {
+                AutocompletePopupView(
+                    items: viewModel.filteredAutocompleteItems,
+                    selectedIndex: viewModel.autocompleteSelectedIndex,
+                    onSelect: { item in
+                        viewModel.selectAutocompleteItem(item)
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .animation(.easeOut(duration: 0.15), value: viewModel.filteredAutocompleteItems.count)
+            }
+
             Divider()
                 .background(Color.primary.opacity(0.15))
 
@@ -34,8 +48,26 @@ struct InputBarView: View {
                     textColor: .labelColor,
                     maxHeight: maxInputHeight,
                     onSubmit: {
-                        viewModel.sendMessage()
+                        if viewModel.showAutocomplete {
+                            viewModel.confirmAutocompleteSelection()
+                        } else {
+                            viewModel.sendMessage()
+                        }
                     },
+                    onArrowUp: {
+                        viewModel.handleAutocompleteArrowUp()
+                    },
+                    onArrowDown: {
+                        viewModel.handleAutocompleteArrowDown()
+                    },
+                    onEscape: {
+                        viewModel.dismissAutocomplete()
+                    },
+                    isAutocompleteActive: viewModel.showAutocomplete,
+                    shouldMoveCursorToEnd: Binding(
+                        get: { viewModel.shouldMoveCursorToEnd },
+                        set: { viewModel.shouldMoveCursorToEnd = $0 }
+                    ),
                     dynamicHeight: $textHeight,
                     shouldFocus: $viewModel.shouldFocusInput
                 )
@@ -82,6 +114,9 @@ struct InputBarView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+        }
+        .onChange(of: viewModel.queryText) { _, _ in
+            viewModel.updateAutocompleteState()
         }
     }
 }

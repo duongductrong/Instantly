@@ -13,6 +13,16 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
     var speakingMessageID: UUID?
     var shouldFocusInput: Bool = false
 
+    // MARK: - Autocomplete State
+    var showAutocomplete: Bool = false
+    var autocompleteQuery: String = ""
+    var autocompleteSelectedIndex: Int = 0
+    var shouldMoveCursorToEnd: Bool = false
+
+    var filteredAutocompleteItems: [AutocompleteItem] {
+        AutocompleteItem.fakeItems.filter { $0.matches(query: autocompleteQuery) }
+    }
+
     private var streamTask: Task<Void, Never>?
     private var capturedContextItems: [ContextItem] = []
     private let speechSynthesizer = NSSpeechSynthesizer()
@@ -202,6 +212,75 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
 
     func speechSynthesizer(_ sender: NSSpeechSynthesizer, didFinishSpeaking finishedSpeaking: Bool) {
         speakingMessageID = nil
+    }
+
+    // MARK: - Autocomplete
+
+    func updateAutocompleteState() {
+        // Find the last occurrence of "@" in queryText
+        guard let atIndex = queryText.lastIndex(of: "@") else {
+            dismissAutocomplete()
+            return
+        }
+
+        // Extract the query text after "@"
+        let afterAt = queryText[queryText.index(after: atIndex)...]
+
+        // If there's a space after the query part, dismiss (user moved on)
+        if afterAt.contains(" ") || afterAt.contains("\n") {
+            dismissAutocomplete()
+            return
+        }
+
+        autocompleteQuery = String(afterAt)
+        let filtered = filteredAutocompleteItems
+
+        if filtered.isEmpty {
+            dismissAutocomplete()
+        } else {
+            showAutocomplete = true
+            // Clamp selected index to valid range
+            if autocompleteSelectedIndex >= filtered.count {
+                autocompleteSelectedIndex = max(filtered.count - 1, 0)
+            }
+        }
+    }
+
+    func selectAutocompleteItem(_ item: AutocompleteItem) {
+        // Replace "@query" with the selected item's label
+        if let atIndex = queryText.lastIndex(of: "@") {
+            queryText = String(queryText[..<atIndex]) + item.label + " "
+        }
+        shouldMoveCursorToEnd = true
+        dismissAutocomplete()
+        requestInputFocus()
+    }
+
+    func handleAutocompleteArrowUp() {
+        guard showAutocomplete else { return }
+        let count = filteredAutocompleteItems.count
+        guard count > 0 else { return }
+        autocompleteSelectedIndex = (autocompleteSelectedIndex - 1 + count) % count
+    }
+
+    func handleAutocompleteArrowDown() {
+        guard showAutocomplete else { return }
+        let count = filteredAutocompleteItems.count
+        guard count > 0 else { return }
+        autocompleteSelectedIndex = (autocompleteSelectedIndex + 1) % count
+    }
+
+    func confirmAutocompleteSelection() {
+        guard showAutocomplete else { return }
+        let filtered = filteredAutocompleteItems
+        guard autocompleteSelectedIndex >= 0, autocompleteSelectedIndex < filtered.count else { return }
+        selectAutocompleteItem(filtered[autocompleteSelectedIndex])
+    }
+
+    func dismissAutocomplete() {
+        showAutocomplete = false
+        autocompleteQuery = ""
+        autocompleteSelectedIndex = 0
     }
 
     // MARK: - Window Size
