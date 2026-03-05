@@ -114,6 +114,7 @@ struct BodyView: View {
             messageText(for: message)
         } else {
             messageText(for: message)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(message.role.bubbleBackgroundColor)
@@ -129,13 +130,11 @@ struct BodyView: View {
             AssistantMarkdownView(content: displayContent)
                 .foregroundStyle(.primary)
         } else {
-            SelectableTextBlock(
-                attributedString: MarkdownAttributedStringBuilder.buildPlainText(
-                    displayContent,
-                    font: .systemFont(ofSize: 14),
-                    textColor: .labelColor
-                )
-            )
+            Text(displayContent)
+                .font(.system(size: 14))
+                .foregroundStyle(.primary)
+                .lineSpacing(3)
+                .textSelection(.enabled)
         }
     }
 
