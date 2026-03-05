@@ -3,6 +3,7 @@ import SwiftUI
 struct ExpandedWindowView: View {
     @Bindable var viewModel: ExpandedWindowViewModel
     @State private var newChatShortcutMonitor: Any?
+    @State private var inputBarMinY: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -10,6 +11,37 @@ struct ExpandedWindowView: View {
             BodyView(viewModel: viewModel)
             ContextBarView(viewModel: viewModel)
             InputBarView(viewModel: viewModel)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear {
+                                inputBarMinY = geo.frame(in: .named("expandedWindow")).minY
+                            }
+                            .onChange(of: geo.size.height) { _, _ in
+                                inputBarMinY = geo.frame(in: .named("expandedWindow")).minY
+                            }
+                    }
+                )
+        }
+        .coordinateSpace(name: "expandedWindow")
+        .overlay {
+            if viewModel.showAutocomplete {
+                VStack {
+                    Spacer()
+                    AutocompletePopupView(
+                        items: viewModel.filteredAutocompleteItems,
+                        selectedIndex: viewModel.autocompleteSelectedIndex,
+                        onSelect: { item in
+                            viewModel.selectAutocompleteItem(item)
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                }
+                .frame(height: inputBarMinY - 4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .animation(.easeOut(duration: 0.15), value: viewModel.filteredAutocompleteItems.count)
+            }
         }
         .frame(
             width: viewModel.expandedWidth,

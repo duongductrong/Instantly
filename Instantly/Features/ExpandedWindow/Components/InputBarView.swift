@@ -23,20 +23,6 @@ struct InputBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Autocomplete popup (appears above the input bar)
-            if viewModel.showAutocomplete {
-                AutocompletePopupView(
-                    items: viewModel.filteredAutocompleteItems,
-                    selectedIndex: viewModel.autocompleteSelectedIndex,
-                    onSelect: { item in
-                        viewModel.selectAutocompleteItem(item)
-                    }
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-                .animation(.easeOut(duration: 0.15), value: viewModel.filteredAutocompleteItems.count)
-            }
-
             Divider()
                 .background(Color.primary.opacity(0.15))
 
