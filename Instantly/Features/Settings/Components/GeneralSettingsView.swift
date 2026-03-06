@@ -30,20 +30,26 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Toggle(isOn: Binding(
-                    get: { settingsService.settings.system.showPanelOnAppLaunch },
-                    set: { value in settingsService.updateSystem { $0.showPanelOnAppLaunch = value } }
-                )) {
+                Toggle(
+                    isOn: Binding(
+                        get: { settingsService.settings.system.showPanelOnAppLaunch },
+                        set: { value in
+                            settingsService.updateSystem { $0.showPanelOnAppLaunch = value }
+                        }
+                    )
+                ) {
                     Text("Show panel on app launch")
                 }
 
-                Toggle(isOn: Binding(
-                    get: { settingsService.settings.system.launchAtLogin },
-                    set: { value in
-                        settingsService.updateSystem { $0.launchAtLogin = value }
-                        try? LaunchAtLoginService.setEnabled(value)
-                    }
-                )) {
+                Toggle(
+                    isOn: Binding(
+                        get: { settingsService.settings.system.launchAtLogin },
+                        set: { value in
+                            settingsService.updateSystem { $0.launchAtLogin = value }
+                            try? LaunchAtLoginService.setEnabled(value)
+                        }
+                    )
+                ) {
                     Text("Start at login")
                 }
             } header: {
@@ -63,7 +69,11 @@ struct GeneralSettingsView: View {
     }
 
     private func applyAppearance(_ mode: AppearanceMode) {
-        NSApp.appearance = mode.resolvedAppearance
+        let resolved = mode.resolvedAppearance
+        NSApp.appearance = resolved
+        for window in NSApp.windows {
+            window.appearance = resolved
+        }
     }
 }
 
