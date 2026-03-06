@@ -1,8 +1,16 @@
+---
+trigger: always_on
+---
+
 # GEMINI.md
 
 > This file defines how the AI behaves in this workspace.
 
 ---
+
+## MANDATORY REQUIREMENTS
+
+CRITICAL: You MUST read GEMINI.md, and review all available skill descriptions and identify the skills that best match the incoming request before proceeding with any work.
 
 ## CRITICAL: AGENT & SKILL PROTOCOL (START HERE)
 
