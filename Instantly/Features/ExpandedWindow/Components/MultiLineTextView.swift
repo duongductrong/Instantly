@@ -10,8 +10,8 @@ struct MultiLineTextView: NSViewRepresentable {
     var placeholderColor: NSColor = .placeholderTextColor
     var maxHeight: CGFloat = 120
     var onSubmit: (() -> Void)?
-    var onArrowUp: (() -> Void)?
-    var onArrowDown: (() -> Void)?
+    var onArrowUp: (() -> Bool)?
+    var onArrowDown: (() -> Bool)?
     var onEscape: (() -> Void)?
     var isAutocompleteActive: Bool = false
     @Binding var shouldMoveCursorToEnd: Bool
@@ -214,8 +214,8 @@ struct MultiLineTextView: NSViewRepresentable {
 
 final class SubmitTextView: NSTextView {
     var onSubmit: (() -> Void)?
-    var onArrowUp: (() -> Void)?
-    var onArrowDown: (() -> Void)?
+    var onArrowUp: (() -> Bool)?
+    var onArrowDown: (() -> Bool)?
     var onEscape: (() -> Void)?
     var isAutocompleteActive: Bool = false
 
@@ -229,15 +229,13 @@ final class SubmitTextView: NSTextView {
             return
         }
 
-        // Arrow Up → navigate autocomplete
-        if keyCode == 126, isAutocompleteActive {
-            onArrowUp?()
+        // Arrow Up → navigate autocomplete (callback returns true if handled)
+        if keyCode == 126, onArrowUp?() == true {
             return
         }
 
-        // Arrow Down → navigate autocomplete
-        if keyCode == 125, isAutocompleteActive {
-            onArrowDown?()
+        // Arrow Down → navigate autocomplete (callback returns true if handled)
+        if keyCode == 125, onArrowDown?() == true {
             return
         }
 

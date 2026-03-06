@@ -5,6 +5,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case about
     case assistant
     case model
+    case quickActions
 
     var id: String {
         rawValue
@@ -16,6 +17,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .about: "About"
         case .assistant: "Assistant"
         case .model: "Model"
+        case .quickActions: "Quick Actions"
         }
     }
 
@@ -25,6 +27,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .about: "info.circle"
         case .assistant: "sparkles"
         case .model: "cpu"
+        case .quickActions: "bolt.badge.clock"
         }
     }
 
@@ -32,5 +35,5 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     static let topSection: [SettingsTab] = [.general, .about]
 
     /// Tabs that appear under the "Instantly" section header
-    static let instantlySection: [SettingsTab] = [.assistant, .model]
+    static let instantlySection: [SettingsTab] = [.assistant, .model, .quickActions]
 }

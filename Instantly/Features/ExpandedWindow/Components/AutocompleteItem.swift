@@ -42,6 +42,38 @@ struct AutocompleteItem: Identifiable, Equatable {
     }
 }
 
+// MARK: - Build from Settings
+
+extension AutocompleteItem {
+    /// Builds autocomplete items from persisted QuickActionsSettings,
+    /// including only entries that are enabled.
+    static func buildItems(from settings: QuickActionsSettings) -> [AutocompleteItem] {
+        let models: [AutocompleteItem] = settings.mentionableModels
+            .filter(\.isEnabled)
+            .map { model in
+                AutocompleteItem(
+                    id: model.id,
+                    label: model.label,
+                    category: .model,
+                    icon: model.icon
+                )
+            }
+
+        let actions: [AutocompleteItem] = settings.quickActions
+            .filter(\.isEnabled)
+            .map { action in
+                AutocompleteItem(
+                    id: action.id,
+                    label: action.label,
+                    category: .quickAction,
+                    icon: action.icon
+                )
+            }
+
+        return models + actions
+    }
+}
+
 // MARK: - Fake Data for Preview
 
 extension AutocompleteItem {

@@ -63,6 +63,8 @@ struct SettingsView: View {
             AssistantSettingsView()
         case .model:
             ModelSettingsView()
+        case .quickActions:
+            QuickActionsSettingsView()
         }
     }
 }

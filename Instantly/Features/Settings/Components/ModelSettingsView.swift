@@ -3,11 +3,17 @@ import SwiftUI
 struct ModelSettingsView: View {
     private let settingsService = SettingsService.shared
 
+    @State private var draft: ModelSettings = .defaultValue
     @State private var apiKeyText: String = ""
     @State private var showingAPIKey = false
 
     private var selectedProvider: ProviderKind {
-        settingsService.settings.model.selectedProvider
+        draft.selectedProvider
+    }
+
+    private var hasChanges: Bool {
+        draft != settingsService.settings.model
+            || apiKeyText != settingsService.apiKey(for: draft.selectedProvider)
     }
 
     var body: some View {
@@ -16,12 +22,24 @@ struct ModelSettingsView: View {
             providerConfigSection
             parametersSection
             validationSection
+
+            Section {
+                HStack {
+                    Spacer()
+                    Button("Save") {
+                        save()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!hasChanges)
+                }
+            }
         }
         .formStyle(.grouped)
         .onAppear {
+            draft = settingsService.settings.model
             loadAPIKey()
         }
-        .onChange(of: settingsService.settings.model.selectedProvider) { _, _ in
+        .onChange(of: draft.selectedProvider) { _, _ in
             loadAPIKey()
             showingAPIKey = false
         }
@@ -42,7 +60,7 @@ struct ModelSettingsView: View {
                             provider: provider,
                             isSelected: selectedProvider == provider
                         ) {
-                            settingsService.updateModel { $0.selectedProvider = provider }
+                            draft.selectedProvider = provider
                         }
                     }
                 }
@@ -88,7 +106,7 @@ struct ModelSettingsView: View {
                     Text("Temperature")
                         .font(.system(size: 13))
                     Spacer()
-                    Text(String(format: "%.1f", settingsService.settings.model.temperature))
+                    Text(String(format: "%.1f", draft.temperature))
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
@@ -98,10 +116,7 @@ struct ModelSettingsView: View {
                 }
 
                 Slider(
-                    value: Binding(
-                        get: { settingsService.settings.model.temperature },
-                        set: { value in settingsService.updateModel { $0.temperature = value } }
-                    ),
+                    value: $draft.temperature,
                     in: 0 ... 2,
                     step: 0.1
                 )
@@ -126,10 +141,8 @@ struct ModelSettingsView: View {
 
                 TextField(
                     "2048",
-                    value: Binding(
-                        get: { settingsService.settings.model.maxTokens },
-                        set: { value in settingsService.updateModel { $0.maxTokens = value } }
-                    ), format: .number
+                    value: $draft.maxTokens,
+                    format: .number
                 )
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 120)
@@ -173,19 +186,13 @@ struct ModelSettingsView: View {
             SettingsTextField(
                 label: "Base URL",
                 placeholder: "http://localhost:11434",
-                text: Binding(
-                    get: { settingsService.settings.model.ollama.baseURL },
-                    set: { value in settingsService.updateModel { $0.ollama.baseURL = value } }
-                )
+                text: $draft.ollama.baseURL
             )
 
             SettingsTextField(
                 label: "Model",
                 placeholder: "llama3.1",
-                text: Binding(
-                    get: { settingsService.settings.model.ollama.model },
-                    set: { value in settingsService.updateModel { $0.ollama.model = value } }
-                )
+                text: $draft.ollama.model
             )
         }
     }
@@ -195,19 +202,13 @@ struct ModelSettingsView: View {
             SettingsTextField(
                 label: "Base URL",
                 placeholder: "https://api.openai.com/v1",
-                text: Binding(
-                    get: { settingsService.settings.model.openAI.baseURL },
-                    set: { value in settingsService.updateModel { $0.openAI.baseURL = value } }
-                )
+                text: $draft.openAI.baseURL
             )
 
             SettingsTextField(
                 label: "Model",
                 placeholder: "gpt-4.1-mini",
-                text: Binding(
-                    get: { settingsService.settings.model.openAI.model },
-                    set: { value in settingsService.updateModel { $0.openAI.model = value } }
-                )
+                text: $draft.openAI.model
             )
         }
     }
@@ -216,10 +217,7 @@ struct ModelSettingsView: View {
         SettingsTextField(
             label: "Model",
             placeholder: "claude-3-7-sonnet-latest",
-            text: Binding(
-                get: { settingsService.settings.model.claude.model },
-                set: { value in settingsService.updateModel { $0.claude.model = value } }
-            )
+            text: $draft.claude.model
         )
     }
 
@@ -228,29 +226,19 @@ struct ModelSettingsView: View {
             SettingsTextField(
                 label: "Provider label",
                 placeholder: "My Provider",
-                text: Binding(
-                    get: { settingsService.settings.model.custom.providerLabel },
-                    set: { value in settingsService.updateModel { $0.custom.providerLabel = value }
-                    }
-                )
+                text: $draft.custom.providerLabel
             )
 
             SettingsTextField(
                 label: "Base URL",
                 placeholder: "https://...",
-                text: Binding(
-                    get: { settingsService.settings.model.custom.baseURL },
-                    set: { value in settingsService.updateModel { $0.custom.baseURL = value } }
-                )
+                text: $draft.custom.baseURL
             )
 
             SettingsTextField(
                 label: "Model",
                 placeholder: "model-name",
-                text: Binding(
-                    get: { settingsService.settings.model.custom.model },
-                    set: { value in settingsService.updateModel { $0.custom.model = value } }
-                )
+                text: $draft.custom.model
             )
         }
     }
@@ -272,9 +260,6 @@ struct ModelSettingsView: View {
                     }
                 }
                 .textFieldStyle(.roundedBorder)
-                .onChange(of: apiKeyText) { _, newValue in
-                    settingsService.setAPIKey(newValue, for: provider)
-                }
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) {
@@ -295,9 +280,13 @@ struct ModelSettingsView: View {
 
     // MARK: - Helpers
 
+    private func save() {
+        settingsService.updateModel { $0 = draft }
+        settingsService.setAPIKey(apiKeyText, for: draft.selectedProvider)
+    }
+
     private func loadAPIKey() {
-        let provider = settingsService.settings.model.selectedProvider
-        apiKeyText = settingsService.apiKey(for: provider)
+        apiKeyText = settingsService.apiKey(for: draft.selectedProvider)
     }
 
     private func providerIcon(for provider: ProviderKind) -> String {

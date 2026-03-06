@@ -12,23 +12,27 @@ struct AppSettings: Codable, Equatable {
     var assistant: AssistantSettings
     var model: ModelSettings
     var system: SystemSettings
+    var quickActions: QuickActionsSettings
 
     init(
         schemaVersion: Int = AppSettings.currentSchemaVersion,
         assistant: AssistantSettings,
         model: ModelSettings,
-        system: SystemSettings
+        system: SystemSettings,
+        quickActions: QuickActionsSettings = .defaultValue
     ) {
         self.schemaVersion = schemaVersion
         self.assistant = assistant
         self.model = model
         self.system = system
+        self.quickActions = quickActions
     }
 
     static let defaultValue = AppSettings(
         assistant: .defaultValue,
         model: .defaultValue,
-        system: .defaultValue
+        system: .defaultValue,
+        quickActions: .defaultValue
     )
 }
 
@@ -300,4 +304,77 @@ struct HotkeyBinding: Codable, Equatable, Hashable {
         UInt32(kVK_Space): "Space", UInt32(kVK_Return): "Return",
         UInt32(kVK_Delete): "Delete", UInt32(kVK_Escape): "Esc",
     ]
+}
+
+// MARK: - Quick Action
+
+struct QuickAction: Codable, Equatable, Identifiable {
+    var id: UUID
+    var label: String
+    var prompt: String
+    var icon: String
+    var isEnabled: Bool
+
+    init(
+        id: UUID = UUID(),
+        label: String,
+        prompt: String,
+        icon: String = "bolt.fill",
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.label = label
+        self.prompt = prompt
+        self.icon = icon
+        self.isEnabled = isEnabled
+    }
+}
+
+// MARK: - Mentionable Model
+
+struct MentionableModel: Codable, Equatable, Identifiable {
+    var id: UUID
+    var label: String
+    var provider: ProviderKind
+    var modelId: String
+    var icon: String
+    var isEnabled: Bool
+
+    init(
+        id: UUID = UUID(),
+        label: String,
+        provider: ProviderKind,
+        modelId: String,
+        icon: String = "brain.head.profile",
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.label = label
+        self.provider = provider
+        self.modelId = modelId
+        self.icon = icon
+        self.isEnabled = isEnabled
+    }
+}
+
+// MARK: - Quick Actions Settings
+
+struct QuickActionsSettings: Codable, Equatable {
+    var quickActions: [QuickAction]
+    var mentionableModels: [MentionableModel]
+
+    static let defaultValue = QuickActionsSettings(
+        quickActions: [
+            QuickAction(label: "Summarize", prompt: "Summarize the following:"),
+            QuickAction(label: "Translate", prompt: "Translate the following to English:"),
+            QuickAction(label: "Explain", prompt: "Explain the following in simple terms:"),
+            QuickAction(label: "Fix Grammar", prompt: "Fix the grammar in the following:"),
+        ],
+        mentionableModels: [
+            MentionableModel(label: "GPT-4.1 Mini", provider: .openAI, modelId: "gpt-4.1-mini"),
+            MentionableModel(label: "Claude 3.7 Sonnet", provider: .claude, modelId: "claude-3-7-sonnet-latest"),
+            MentionableModel(label: "Llama 3.1", provider: .ollama, modelId: "llama3.1"),
+            MentionableModel(label: "Gemini 2.5 Pro", provider: .custom, modelId: "gemini-2.5-pro"),
+        ]
+    )
 }

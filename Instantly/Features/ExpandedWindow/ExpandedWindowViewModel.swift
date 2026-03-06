@@ -20,7 +20,9 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
     var shouldMoveCursorToEnd: Bool = false
 
     var filteredAutocompleteItems: [AutocompleteItem] {
-        AutocompleteItem.fakeItems.filter { $0.matches(query: autocompleteQuery) }
+        let settings = SettingsService.shared.settings.quickActions
+        return AutocompleteItem.buildItems(from: settings)
+            .filter { $0.matches(query: autocompleteQuery) }
     }
 
     private var streamTask: Task<Void, Never>?
@@ -256,18 +258,22 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
         requestInputFocus()
     }
 
-    func handleAutocompleteArrowUp() {
-        guard showAutocomplete else { return }
+    @discardableResult
+    func handleAutocompleteArrowUp() -> Bool {
+        guard showAutocomplete else { return false }
         let count = filteredAutocompleteItems.count
-        guard count > 0 else { return }
+        guard count > 0 else { return false }
         autocompleteSelectedIndex = (autocompleteSelectedIndex - 1 + count) % count
+        return true
     }
 
-    func handleAutocompleteArrowDown() {
-        guard showAutocomplete else { return }
+    @discardableResult
+    func handleAutocompleteArrowDown() -> Bool {
+        guard showAutocomplete else { return false }
         let count = filteredAutocompleteItems.count
-        guard count > 0 else { return }
+        guard count > 0 else { return false }
         autocompleteSelectedIndex = (autocompleteSelectedIndex + 1) % count
+        return true
     }
 
     func confirmAutocompleteSelection() {

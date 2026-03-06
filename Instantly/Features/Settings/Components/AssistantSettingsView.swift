@@ -3,6 +3,12 @@ import SwiftUI
 struct AssistantSettingsView: View {
     private let settingsService = SettingsService.shared
 
+    @State private var draft: AssistantSettings = .defaultValue
+
+    private var hasChanges: Bool {
+        draft != settingsService.settings.assistant
+    }
+
     var body: some View {
         Form {
             Section {
@@ -10,30 +16,24 @@ struct AssistantSettingsView: View {
                     Text("System prompt")
                         .font(.system(size: 13, weight: .medium))
 
-                    TextEditor(text: Binding(
-                        get: { settingsService.settings.assistant.systemPrompt },
-                        set: { value in settingsService.updateAssistant { $0.systemPrompt = value } }
-                    ))
-                    .font(.system(size: 13))
-                    .frame(minHeight: 80, maxHeight: 160)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .background(Color.primary.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                    )
+                    TextEditor(text: $draft.systemPrompt)
+                        .font(.system(size: 13))
+                        .frame(minHeight: 80, maxHeight: 160)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(Color.primary.opacity(0.04))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                        )
                 }
             } header: {
                 Text("Prompt")
             }
 
             Section {
-                Toggle(isOn: Binding(
-                    get: { settingsService.settings.assistant.includeActiveAppContext },
-                    set: { value in settingsService.updateAssistant { $0.includeActiveAppContext = value } }
-                )) {
+                Toggle(isOn: $draft.includeActiveAppContext) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Include active app context")
                         Text("Sends the name of the currently focused application")
@@ -42,10 +42,7 @@ struct AssistantSettingsView: View {
                     }
                 }
 
-                Toggle(isOn: Binding(
-                    get: { settingsService.settings.assistant.includeSelectedTextContext },
-                    set: { value in settingsService.updateAssistant { $0.includeSelectedTextContext = value } }
-                )) {
+                Toggle(isOn: $draft.includeSelectedTextContext) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Include selected text context")
                         Text("Sends any selected text as additional context")
@@ -67,9 +64,9 @@ struct AssistantSettingsView: View {
                     }
                     Spacer()
                     HotkeyRecorderButton(
-                        binding: settingsService.settings.assistant.newChatShortcut,
+                        binding: draft.newChatShortcut,
                         onRecord: { newBinding in
-                            settingsService.updateAssistant { $0.newChatShortcut = newBinding }
+                            draft.newChatShortcut = newBinding
                         }
                     )
                 }
@@ -78,11 +75,25 @@ struct AssistantSettingsView: View {
             }
 
             Section {
-                Button("Reset Assistant to Defaults") {
-                    settingsService.resetAssistantToDefaults()
+                HStack {
+                    Button("Reset Assistant to Defaults") {
+                        settingsService.resetAssistantToDefaults()
+                        draft = settingsService.settings.assistant
+                    }
+
+                    Spacer()
+
+                    Button("Save") {
+                        settingsService.updateAssistant { $0 = draft }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!hasChanges)
                 }
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            draft = settingsService.settings.assistant
+        }
     }
 }

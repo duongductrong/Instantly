@@ -3,13 +3,19 @@ import SwiftUI
 struct GeneralSettingsView: View {
     private let settingsService = SettingsService.shared
 
+    @State private var draft: SystemSettings = .defaultValue
+
+    private var hasChanges: Bool {
+        draft != settingsService.settings.system
+    }
+
     var body: some View {
         Form {
             Section {
                 AppearanceModePicker(
-                    selectedMode: settingsService.settings.system.appearanceMode,
+                    selectedMode: draft.appearanceMode,
                     onSelect: { mode in
-                        settingsService.updateSystem { $0.appearanceMode = mode }
+                        draft.appearanceMode = mode
                         applyAppearance(mode)
                     }
                 )
@@ -18,10 +24,9 @@ struct GeneralSettingsView: View {
                     Text("Keyboard shortcut")
                     Spacer()
                     HotkeyRecorderButton(
-                        binding: settingsService.settings.system.globalHotkey,
+                        binding: draft.globalHotkey,
                         onRecord: { newBinding in
-                            settingsService.updateSystem { $0.globalHotkey = newBinding }
-                            PanelController.shared.setupHotkey()
+                            draft.globalHotkey = newBinding
                         }
                     )
                 }
@@ -30,26 +35,11 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Toggle(
-                    isOn: Binding(
-                        get: { settingsService.settings.system.showPanelOnAppLaunch },
-                        set: { value in
-                            settingsService.updateSystem { $0.showPanelOnAppLaunch = value }
-                        }
-                    )
-                ) {
+                Toggle(isOn: $draft.showPanelOnAppLaunch) {
                     Text("Show panel on app launch")
                 }
 
-                Toggle(
-                    isOn: Binding(
-                        get: { settingsService.settings.system.launchAtLogin },
-                        set: { value in
-                            settingsService.updateSystem { $0.launchAtLogin = value }
-                            try? LaunchAtLoginService.setEnabled(value)
-                        }
-                    )
-                ) {
+                Toggle(isOn: $draft.launchAtLogin) {
                     Text("Start at login")
                 }
             } header: {
@@ -57,15 +47,34 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Button("Reset All Settings", role: .destructive) {
-                    settingsService.resetAllSettings()
+                HStack {
+                    Button("Reset All Settings", role: .destructive) {
+                        settingsService.resetAllSettings()
+                        draft = settingsService.settings.system
+                    }
+
+                    Spacer()
+
+                    Button("Save") {
+                        save()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!hasChanges)
                 }
             }
         }
         .formStyle(.grouped)
         .onAppear {
-            applyAppearance(settingsService.settings.system.appearanceMode)
+            draft = settingsService.settings.system
+            applyAppearance(draft.appearanceMode)
         }
+    }
+
+    private func save() {
+        settingsService.updateSystem { $0 = draft }
+        try? LaunchAtLoginService.setEnabled(draft.launchAtLogin)
+        applyAppearance(draft.appearanceMode)
+        PanelController.shared.setupHotkey()
     }
 
     private func applyAppearance(_ mode: AppearanceMode) {

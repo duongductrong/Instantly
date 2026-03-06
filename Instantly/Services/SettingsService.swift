@@ -36,6 +36,11 @@ final class SettingsService {
         persist()
     }
 
+    func updateQuickActions(_ update: (inout QuickActionsSettings) -> Void) {
+        update(&settings.quickActions)
+        persist()
+    }
+
     func resetAssistantToDefaults() {
         settings.assistant = .defaultValue
         persist()
