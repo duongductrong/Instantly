@@ -29,7 +29,7 @@ Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Re
 
 **ALWAYS ACTIVE: Before responding to ANY request, automatically analyze and select the best agent(s).**
 
-> 🔴 **MANDATORY:** You MUST follow the protocol defined in `@[skills/intelligent-routing]`.
+<!-- > 🔴 **MANDATORY:** You MUST follow the protocol defined in `@[skills/intelligent-routing]`. (Temporarily disabled: intelligent-routing skill does not exist yet) -->
 
 ### Auto-Selection Protocol
 
@@ -86,6 +86,6 @@ When user's prompt is NOT in English:
 
 **Before coding, answer:**
 
-1. What is the GOAL of this agents/skill?
+1. What is the GOAL of this agent/skill?
 2. What PRINCIPLES must I apply?
 3. How does this DIFFER from generic output?

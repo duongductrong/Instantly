@@ -19,11 +19,7 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
     var autocompleteSelectedIndex: Int = 0
     var shouldMoveCursorToEnd: Bool = false
 
-    var filteredAutocompleteItems: [AutocompleteItem] {
-        let settings = SettingsService.shared.settings.quickActions
-        return AutocompleteItem.buildItems(from: settings)
-            .filter { $0.matches(query: autocompleteQuery) }
-    }
+    var filteredAutocompleteItems: [AutocompleteItem] = []
 
     private var streamTask: Task<Void, Never>?
     private var capturedContextItems: [ContextItem] = []
@@ -235,7 +231,9 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
         }
 
         autocompleteQuery = String(afterAt)
-        let filtered = filteredAutocompleteItems
+        let allItems = AutocompleteItem.buildItems(from: SettingsService.shared.settings.quickActions)
+        let filtered = allItems.filter { $0.matches(query: autocompleteQuery) }
+        filteredAutocompleteItems = filtered
 
         if filtered.isEmpty {
             dismissAutocomplete()
@@ -287,6 +285,7 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
         showAutocomplete = false
         autocompleteQuery = ""
         autocompleteSelectedIndex = 0
+        filteredAutocompleteItems = []
     }
 
     // MARK: - Window Size
