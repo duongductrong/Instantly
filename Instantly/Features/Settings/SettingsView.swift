@@ -36,6 +36,9 @@ struct SettingsView: View {
         }
         .listStyle(.sidebar)
         .frame(minWidth: 180, idealWidth: 200, maxWidth: 220)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear.frame(height: 12)
+        }
     }
 
     private func sidebarItem(_ tab: SettingsTab) -> some View {
