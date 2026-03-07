@@ -1,12 +1,21 @@
 # GEMINI.md
 
-> This file defines how the AI behaves in this workspace.
-
----
-
 ## MANDATORY REQUIREMENTS
 
-CRITICAL: You MUST read GEMINI.md, and review all available skill descriptions and identify the skills that best match the incoming request before proceeding with any work.
+CRITICAL: You MUST read GEMINI.md, scan available skill names, and identify the skills that best match the incoming request before proceeding with any work.
+
+### Response Format (MANDATORY)
+
+**EVERY response MUST start with this block. No exceptions.**
+
+When auto-applying an agent, inform the user:
+
+```markdown
+🤖 **Applying knowledge of `@[agent-name]`...**
+📚 **Skills:** `skill-1`, `skill-2`, `skill-3`
+
+[Continue with specialized response]
+```
 
 ## CRITICAL: AGENT & SKILL PROTOCOL (START HERE)
 
@@ -29,25 +38,12 @@ Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Re
 
 **ALWAYS ACTIVE: Before responding to ANY request, automatically analyze and select the best agent(s).**
 
-<!-- > 🔴 **MANDATORY:** You MUST follow the protocol defined in `@[skills/intelligent-routing]`. (Temporarily disabled: intelligent-routing skill does not exist yet) -->
-
 ### Auto-Selection Protocol
 
 1. **Analyze (Silent)**: Detect domains (Frontend, Backend, Security, etc.) from user request.
 2. **Select Agent(s)**: Choose the most appropriate specialist(s).
 3. **Inform User**: Concisely state which expertise is being applied.
 4. **Apply**: Generate response using the selected agent's persona and rules.
-
-### Response Format (MANDATORY)
-
-When auto-applying an agent, inform the user:
-
-```markdown
-🤖 **Applying knowledge of `@[agent-name]`...**
-📚 **Skills:** `skill-1`, `skill-2`, `skill-3`
-
-[Continue with specialized response]
-```
 
 **Rules:**
 
@@ -69,11 +65,11 @@ When user's prompt is NOT in English:
 
 ### 🗺️ System Map Read
 
-> 🔴 **MANDATORY:** Read `ARCHITECTURE.md` at session start to understand Agents, Skills, and Scripts.
+> 🔴 **MANDATORY:** Start to understand Agents, Skills, and Scripts.
 
 **Path Awareness:**
 
-- Agents: `.agents/` (Project)
+- Agents: `.agents/agents/` (Project)
 - Skills: `.agents/skills/` (Project)
 - Runtime Scripts: `.agents/skills/<skill>/scripts/`
 
