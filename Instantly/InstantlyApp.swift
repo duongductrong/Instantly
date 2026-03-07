@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startApp() {
         PanelController.shared.setupHotkey()
         PanelController.shared.observeScreenChanges()
+        QuickToolbarController.shared.setupHotkey()
 
         if SettingsService.shared.settings.system.showPanelOnAppLaunch {
             PanelController.shared.show()

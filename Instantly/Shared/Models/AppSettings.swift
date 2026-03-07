@@ -380,3 +380,80 @@ struct QuickActionsSettings: Codable, Equatable {
         ]
     )
 }
+
+// MARK: - Quick Toolbar Action (CMD+E)
+
+struct QuickToolbarAction: Identifiable {
+    let id: String
+    let label: String
+    let icon: String
+    let isHighlighted: Bool
+    let isDisabled: Bool
+
+    /// Built-in editing actions shown in the ⌘E floating toolbar.
+    static let builtInActions: [QuickToolbarAction] = [
+        QuickToolbarAction(
+            id: "summarize",
+            label: "Summarize",
+            icon: "text.alignleft",
+            isHighlighted: true,
+            isDisabled: false
+        ),
+        QuickToolbarAction(
+            id: "key_points",
+            label: "Key points",
+            icon: "list.bullet",
+            isHighlighted: false,
+            isDisabled: true
+        ),
+        QuickToolbarAction(
+            id: "fix_spelling",
+            label: "Fix spelling & grammar",
+            icon: "textformat.abc",
+            isHighlighted: false,
+            isDisabled: false
+        ),
+        QuickToolbarAction(
+            id: "make_shorter",
+            label: "Make shorter",
+            icon: "arrow.down.right.and.arrow.up.left",
+            isHighlighted: false,
+            isDisabled: false
+        ),
+        QuickToolbarAction(
+            id: "make_longer",
+            label: "Make longer",
+            icon: "arrow.up.left.and.arrow.down.right",
+            isHighlighted: false,
+            isDisabled: false
+        ),
+        QuickToolbarAction(
+            id: "title_case",
+            label: "Title case",
+            icon: "textformat",
+            isHighlighted: false,
+            isDisabled: false
+        ),
+        QuickToolbarAction(
+            id: "change_tone",
+            label: "Change tone",
+            icon: "waveform.and.mic",
+            isHighlighted: false,
+            isDisabled: false
+        ),
+    ]
+
+    /// Returns the prompt string to prepend when this action is selected.
+    var prompt: String {
+        switch id {
+        case "summarize": "Summarize the following:"
+        case "key_points": "Extract the key points from the following:"
+        case "fix_spelling": "Fix the spelling and grammar in the following:"
+        case "make_shorter": "Make the following text shorter and more concise:"
+        case "make_longer": "Expand the following text with more detail:"
+        case "title_case": "Convert the following text to title case:"
+        case "change_tone": "Change the tone of the following text to be more professional:"
+        default: ""
+        }
+    }
+}

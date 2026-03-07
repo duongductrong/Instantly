@@ -1,0 +1,235 @@
+import AppKit
+import Carbon.HIToolbox
+import SwiftUI
+
+/// Manages the ⌘E floating toolbar panel: hotkey registration, positioning at cursor, and action dispatch.
+@MainActor
+final class QuickToolbarController {
+    static let shared = QuickToolbarController()
+
+    private var panel: FloatingPanel?
+    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyHandlerRef: EventHandlerRef?
+    private var clickMonitor: Any?
+    private var capturedContext: [ContextItem] = []
+
+    private init() {}
+
+    // MARK: - Hotkey Registration (Carbon API)
+
+    func setupHotkey() {
+        installHotKeyHandler()
+        registerHotKey()
+    }
+
+    // MARK: - Show / Hide
+
+    func show(at mouseLocation: NSPoint) {
+        // Capture context BEFORE our panel steals focus
+        capturedContext = ActiveAppContextService.captureContext()
+
+        let actions = QuickToolbarAction.builtInActions
+        let toolbarView = QuickToolbarView(
+            actions: actions,
+            onAction: { [weak self] action in
+                self?.handleAction(action)
+            },
+            onDismiss: { [weak self] in
+                self?.hide()
+            }
+        )
+
+        let rowCount = CGFloat(actions.count)
+        let estimatedHeight = (rowCount * DesignTokens.toolbarRowHeight) + 12 // 6pt padding top + bottom
+        let toolbarSize = CGSize(width: DesignTokens.toolbarWidth, height: estimatedHeight)
+
+        // Position: just below the mouse cursor, clamped to screen
+        let origin = clampedOrigin(for: toolbarSize, near: mouseLocation)
+
+        if let panel {
+            // Reuse existing panel
+            let hostingView = NSHostingView(rootView: AnyView(toolbarView.ignoresSafeArea()))
+            panel.contentView = hostingView
+            panel.contentView?.wantsLayer = true
+            panel.contentView?.layer?.cornerRadius = DesignTokens.toolbarCornerRadius
+            panel.contentView?.layer?.masksToBounds = true
+            panel.setFrame(NSRect(origin: origin, size: toolbarSize), display: true)
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            let newPanel = FloatingPanel(contentView: toolbarView)
+            newPanel.setFrame(NSRect(origin: origin, size: toolbarSize), display: true)
+            newPanel.updateCornerRadius(DesignTokens.toolbarCornerRadius)
+            newPanel.makeKeyAndOrderFront(nil)
+            panel = newPanel
+        }
+
+        startClickMonitor()
+    }
+
+    func hide() {
+        stopClickMonitor()
+        panel?.orderOut(nil)
+        capturedContext = []
+    }
+
+    var isVisible: Bool {
+        panel?.isVisible ?? false
+    }
+
+    // MARK: - Action Dispatch
+
+    private func handleAction(_ action: QuickToolbarAction) {
+        let context = capturedContext
+        hide()
+
+        // Open the Expanded Window with context + action prompt pre-injected
+        let controller = PanelController.shared
+        let vm = controller.expandedViewModel
+        vm.setContext(context)
+        vm.queryText = action.prompt + " "
+        vm.shouldMoveCursorToEnd = true
+
+        // Ensure the panel is shown and expanded
+        if controller.state == .hidden {
+            controller.show()
+        }
+        if controller.state != .expanded {
+            controller.expand()
+        }
+
+        // Auto-submit after a short delay so the panel is fully ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            vm.sendMessage()
+        }
+    }
+
+    // MARK: - Positioning
+
+    private func clampedOrigin(for size: CGSize, near mouseLocation: NSPoint) -> NSPoint {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        else {
+            return NSPoint(x: mouseLocation.x, y: mouseLocation.y - size.height - DesignTokens.toolbarVerticalOffset)
+        }
+
+        let visibleFrame = screen.visibleFrame
+
+        // Place below cursor (macOS coordinates: y increases upward)
+        var x = mouseLocation.x - size.width / 2
+        var y = mouseLocation.y - size.height - DesignTokens.toolbarVerticalOffset
+
+        // Clamp horizontally
+        x = max(visibleFrame.minX + 4, min(x, visibleFrame.maxX - size.width - 4))
+
+        // Clamp vertically — if toolbar would go below screen, place it above the cursor instead
+        if y < visibleFrame.minY + 4 {
+            y = mouseLocation.y + DesignTokens.toolbarVerticalOffset + 20 // 20 ≈ cursor height
+        }
+        y = min(y, visibleFrame.maxY - size.height - 4)
+
+        return NSPoint(x: x, y: y)
+    }
+
+    // MARK: - Click-Outside Monitor
+
+    private func startClickMonitor() {
+        guard clickMonitor == nil else { return }
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self, let panel = self.panel, panel.isVisible else { return }
+                if !panel.frame.contains(NSEvent.mouseLocation) {
+                    self.hide()
+                }
+            }
+        }
+    }
+
+    private func stopClickMonitor() {
+        if let monitor = clickMonitor {
+            NSEvent.removeMonitor(monitor)
+            clickMonitor = nil
+        }
+    }
+
+    // MARK: - Carbon Hotkey
+
+    private func installHotKeyHandler() {
+        guard hotKeyHandlerRef == nil else { return }
+
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, _ -> OSStatus in
+                // Check the hotkey ID to distinguish from PanelController's hotkey
+                var hotKeyID = EventHotKeyID()
+                let result = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &hotKeyID
+                )
+                guard result == noErr else { return noErr }
+
+                // Only handle our own hotkey (signature "INTB")
+                let expectedSignature = OSType(0x494E_5442) // "INTB"
+                guard hotKeyID.signature == expectedSignature, hotKeyID.id == 1 else {
+                    return OSStatus(eventNotHandledErr)
+                }
+
+                assert(Thread.isMainThread)
+                QuickToolbarController.shared.handleHotKeyPressed()
+                return noErr
+            },
+            1,
+            &eventType,
+            nil,
+            &hotKeyHandlerRef
+        )
+
+        if status != noErr {
+            hotKeyHandlerRef = nil
+        }
+    }
+
+    private func registerHotKey() {
+        if let hotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            self.hotKeyRef = nil
+        }
+
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType(0x494E_5442) // "INTB" — distinct from PanelController's "INST"
+        hotKeyID.id = 1
+
+        let status = RegisterEventHotKey(
+            UInt32(kVK_ANSI_E),
+            UInt32(cmdKey),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status != noErr {
+            hotKeyRef = nil
+        }
+    }
+
+    private func handleHotKeyPressed() {
+        if isVisible {
+            hide()
+        } else {
+            show(at: NSEvent.mouseLocation)
+        }
+    }
+}

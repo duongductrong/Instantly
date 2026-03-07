@@ -259,8 +259,25 @@ final class PanelController {
 
         let status = InstallEventHandler(
             GetApplicationEventTarget(),
-            { _, _, _ -> OSStatus in
-                // Carbon hotkey callbacks run on the main run loop on macOS.
+            { _, event, _ -> OSStatus in
+                // Filter by our own hotkey signature ("INST")
+                var hotKeyID = EventHotKeyID()
+                let result = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &hotKeyID
+                )
+                guard result == noErr else { return OSStatus(eventNotHandledErr) }
+
+                let expectedSignature = OSType(0x494E_5354) // "INST"
+                guard hotKeyID.signature == expectedSignature, hotKeyID.id == 1 else {
+                    return OSStatus(eventNotHandledErr)
+                }
+
                 assert(Thread.isMainThread, "Carbon hotkey callback must run on main thread")
                 PanelController.shared.handleHotKeyPressed()
                 return noErr

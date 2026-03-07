@@ -24,4 +24,11 @@ enum DesignTokens {
     static let contentFadeDelay: Double = 0.25
     static let contentFadeDuration: Double = 0.18
     static let collapseContentDuration: Double = 0.12
+
+    // Quick Toolbar (CMD+E)
+    static let toolbarWidth: CGFloat = 240
+    static let toolbarRowHeight: CGFloat = 36
+    static let toolbarCornerRadius: CGFloat = 12
+    static let toolbarShadowRadius: CGFloat = 16
+    static let toolbarVerticalOffset: CGFloat = 8
 }
