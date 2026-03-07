@@ -123,13 +123,18 @@ struct BodyView: View {
 
     @ViewBuilder
     private func messageText(for message: ChatMessage) -> some View {
-        let displayContent = message.content.isEmpty && message.role == .assistant ? "Thinking" : message.content
+        let isThinking = message.content.isEmpty && message.role == .assistant
 
-        if message.role == .assistant {
-            AssistantMarkdownView(content: displayContent)
+        if isThinking {
+            Text("Thinking")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .italic()
+        } else if message.role == .assistant {
+            AssistantMarkdownView(content: message.content)
                 .foregroundStyle(.primary)
         } else {
-            Text(displayContent)
+            Text(message.content)
                 .font(.system(size: 14))
                 .foregroundStyle(.primary)
                 .lineSpacing(3)
