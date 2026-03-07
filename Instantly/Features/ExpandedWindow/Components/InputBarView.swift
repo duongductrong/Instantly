@@ -55,7 +55,8 @@ struct InputBarView: View {
                         set: { viewModel.shouldMoveCursorToEnd = $0 }
                     ),
                     dynamicHeight: $textHeight,
-                    shouldFocus: $viewModel.shouldFocusInput
+                    shouldFocus: $viewModel.shouldFocusInput,
+                    viewModel: viewModel
                 )
                 .frame(height: textHeight)
                 .animation(.easeOut(duration: 0.15), value: textHeight)

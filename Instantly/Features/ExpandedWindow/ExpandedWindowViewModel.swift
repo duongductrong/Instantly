@@ -21,6 +21,14 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
 
     var filteredAutocompleteItems: [AutocompleteItem] = []
 
+    /// Set by selectAutocompleteItem; the view layer reads this to insert
+    /// a MentionTagAttachment into the NSTextView, then clears it.
+    var pendingMentionInsertion: AutocompleteItem?
+
+    /// Closure provided by MultiLineTextView to extract readable text
+    /// (replaces attachment characters with mention labels).
+    var extractReadableText: (() -> String)?
+
     private var streamTask: Task<Void, Never>?
     private var capturedContextItems: [ContextItem] = []
     private let speechSynthesizer = NSSpeechSynthesizer()
@@ -107,7 +115,10 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
     // MARK: - Chat
 
     func sendMessage() {
-        let text = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Use the extractable text (with mention labels) if available,
+        // otherwise fall back to the plain queryText.
+        let text = (extractReadableText?() ?? queryText)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
 
         let settings = SettingsService.shared.settings
@@ -260,11 +271,8 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
     }
 
     func selectAutocompleteItem(_ item: AutocompleteItem) {
-        // Replace "@query" with the selected item's label
-        if let atIndex = queryText.lastIndex(of: "@") {
-            queryText = String(queryText[..<atIndex]) + item.label + " "
-        }
-        shouldMoveCursorToEnd = true
+        // Signal the view layer to replace "@query" with a tag attachment
+        pendingMentionInsertion = item
         dismissAutocomplete()
         requestInputFocus()
     }
