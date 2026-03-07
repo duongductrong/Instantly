@@ -119,30 +119,24 @@ private struct AutocompleteRowView: View {
 
     // MARK: - Style helpers
 
+    private var accentColor: Color {
+        Color("MentionHighlight")
+    }
+
     private var iconColor: Color {
-        switch item.category {
-        case .model:
-            Color.purple
-        case .quickAction:
-            Color.orange
-        }
+        accentColor
     }
 
     private var iconBackground: Color {
-        iconColor.opacity(0.12)
+        accentColor.opacity(0.12)
     }
 
     private var badgeTextColor: Color {
-        switch item.category {
-        case .model:
-            Color.purple
-        case .quickAction:
-            Color.orange
-        }
+        accentColor
     }
 
     private var badgeBackground: Color {
-        badgeTextColor.opacity(0.12)
+        accentColor.opacity(0.12)
     }
 
     private var selectionColor: Color {
