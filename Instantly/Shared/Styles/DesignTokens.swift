@@ -32,4 +32,7 @@ enum DesignTokens {
     static let toolbarShadowRadius: CGFloat = 16
     static let toolbarVerticalOffset: CGFloat = 8
     static let inlineBubbleMaxWidth: CGFloat = 320
+
+    /// Brand Color
+    static let brandGreen = Color(red: 0.839, green: 0.910, blue: 0.078)
 }

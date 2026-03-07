@@ -120,7 +120,7 @@ private struct QuickToolbarRow: View {
             return .secondary.opacity(0.5)
         }
         if action.isHighlighted {
-            return Color.accentColor
+            return DesignTokens.brandGreen
         }
         return .secondary
     }
@@ -137,10 +137,10 @@ private struct QuickToolbarRow: View {
 
     private var backgroundColor: Color {
         if isActive {
-            return Color.accentColor.opacity(0.12)
+            return DesignTokens.brandGreen.opacity(0.12)
         }
         if action.isHighlighted, !action.isDisabled {
-            return Color.accentColor.opacity(0.06)
+            return DesignTokens.brandGreen.opacity(0.06)
         }
         return .clear
     }

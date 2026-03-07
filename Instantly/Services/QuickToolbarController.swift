@@ -69,6 +69,7 @@ final class QuickToolbarController {
         }
 
         startClickMonitor()
+        startKeyMonitor()
     }
 
     func hide() {
