@@ -215,27 +215,39 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
     // MARK: - Autocomplete
 
     func updateAutocompleteState() {
+        print("[Autocomplete] ── updateAutocompleteState ──")
+        print("[Autocomplete] queryText: \"\(queryText)\"")
+
         // Find the last occurrence of "@" in queryText
         guard let atIndex = queryText.lastIndex(of: "@") else {
+            print("[Autocomplete] No '@' found → dismissing")
             dismissAutocomplete()
             return
         }
 
         // Extract the query text after "@"
         let afterAt = queryText[queryText.index(after: atIndex)...]
+        print("[Autocomplete] afterAt: \"\(afterAt)\"")
 
         // If there's a space after the query part, dismiss (user moved on)
         if afterAt.contains(" ") || afterAt.contains("\n") {
+            print("[Autocomplete] afterAt contains space/newline → dismissing")
             dismissAutocomplete()
             return
         }
 
         autocompleteQuery = String(afterAt)
         let allItems = AutocompleteItem.buildItems(from: SettingsService.shared.settings.quickActions)
+        print(
+            "[Autocomplete] query: \"\(autocompleteQuery)\", allItems(\(allItems.count)): \(allItems.map { "\($0.label) [\($0.category)]" })"
+        )
+
         let filtered = allItems.filter { $0.matches(query: autocompleteQuery) }
+        print("[Autocomplete] filtered(\(filtered.count)): \(filtered.map(\.label))")
         filteredAutocompleteItems = filtered
 
         if filtered.isEmpty {
+            print("[Autocomplete] No matches → dismissing")
             dismissAutocomplete()
         } else {
             showAutocomplete = true
@@ -243,6 +255,7 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
             if autocompleteSelectedIndex >= filtered.count {
                 autocompleteSelectedIndex = max(filtered.count - 1, 0)
             }
+            print("[Autocomplete] Showing popup, selectedIndex: \(autocompleteSelectedIndex)")
         }
     }
 

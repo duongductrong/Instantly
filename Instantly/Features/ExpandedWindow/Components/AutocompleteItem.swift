@@ -37,8 +37,13 @@ struct AutocompleteItem: Identifiable, Equatable {
 
     /// Checks if this item matches a search query (case-insensitive)
     func matches(query: String) -> Bool {
-        guard !query.isEmpty else { return true }
-        return label.localizedCaseInsensitiveContains(query)
+        guard !query.isEmpty else {
+            print("[Autocomplete][Match] \"\(label)\" vs empty query → true")
+            return true
+        }
+        let result = label.localizedCaseInsensitiveContains(query)
+        print("[Autocomplete][Match] \"\(label)\".contains(\"\(query)\") → \(result)")
+        return result
     }
 }
 

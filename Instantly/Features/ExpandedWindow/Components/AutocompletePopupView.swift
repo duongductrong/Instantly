@@ -14,6 +14,10 @@ struct AutocompletePopupView: View {
     private let cornerRadius: CGFloat = 12
 
     var body: some View {
+        let _ =
+            print(
+                "[Autocomplete][PopupView] items(\(items.count)): \(items.map(\.label)), selectedIndex: \(selectedIndex)"
+            )
         if items.isEmpty {
             EmptyView()
         } else {
@@ -26,7 +30,7 @@ struct AutocompletePopupView: View {
                                     item: item,
                                     isSelected: index == selectedIndex
                                 )
-                                .id(index)
+                                .id(item.id)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     onSelect(item)
@@ -37,8 +41,10 @@ struct AutocompletePopupView: View {
                     }
                     .frame(maxHeight: maxVisibleHeight)
                     .onChange(of: selectedIndex) { _, newIndex in
-                        withAnimation(.easeOut(duration: 0.1)) {
-                            proxy.scrollTo(newIndex, anchor: .center)
+                        if newIndex >= 0, newIndex < items.count {
+                            withAnimation(.easeOut(duration: 0.1)) {
+                                proxy.scrollTo(items[newIndex].id, anchor: .center)
+                            }
                         }
                     }
                 }
