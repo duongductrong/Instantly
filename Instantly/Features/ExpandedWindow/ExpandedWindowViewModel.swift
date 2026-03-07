@@ -128,12 +128,21 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
             context: context
         )
 
+        // Extract selected text to attach to the message, then clear it from context bar
+        let selectedTextItem = contextItems.first { $0.type == .selectedText }
+        let attachedText = selectedTextItem?.rawValue
+
         queryText = ""
         requestInputFocus()
         statusMessage = ""
-        messages.append(ChatMessage(role: .user, content: text))
+        messages.append(ChatMessage(role: .user, content: text, attachedSelectedText: attachedText))
         messages.append(ChatMessage(role: .assistant, content: ""))
         isLoading = true
+
+        // Remove selected text from context so it isn't carried forward
+        if let selectedTextItem {
+            removeContextItem(selectedTextItem)
+        }
 
         guard settings.model.selectedProvider == .ollama else {
             if var last = messages.last, last.role == .assistant {

@@ -113,12 +113,54 @@ struct BodyView: View {
         if message.role == .assistant {
             messageText(for: message)
         } else {
-            messageText(for: message)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(message.role.bubbleBackgroundColor)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            VStack(alignment: .trailing, spacing: 6) {
+                // Attached selected text snippet
+                if let attached = message.attachedSelectedText, !attached.isEmpty {
+                    attachedSelectedTextSnippet(attached)
+                }
+
+                messageText(for: message)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(message.role.bubbleBackgroundColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
+    }
+
+    private func attachedSelectedTextSnippet(_ text: String) -> some View {
+        let truncated = text.count > 120
+            ? String(text.prefix(117)) + "..."
+            : text
+
+        return HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "doc.text.fill")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary.opacity(0.7))
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Selected text")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                Text(truncated)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary.opacity(0.7))
+                    .lineLimit(3)
+                    .lineSpacing(2)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 280, alignment: .leading)
+        .background(Color.primary.opacity(0.04))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
