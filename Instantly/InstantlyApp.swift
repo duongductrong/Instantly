@@ -18,6 +18,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         _ = SettingsService.shared
 
+        let settings = SettingsService.shared.settings
+
+        if settings.system.hasCompletedOnboarding {
+            // Normal launch
+            startApp()
+        } else {
+            // First launch — show onboarding
+            OnboardingWindowController.shared.showOnboarding { [weak self] in
+                self?.startApp()
+            }
+        }
+    }
+
+    private func startApp() {
         PanelController.shared.setupHotkey()
         PanelController.shared.observeScreenChanges()
 

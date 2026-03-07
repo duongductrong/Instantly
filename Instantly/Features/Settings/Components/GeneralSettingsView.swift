@@ -42,6 +42,15 @@ struct GeneralSettingsView: View {
                 Toggle(isOn: $draft.launchAtLogin) {
                     Text("Start at login")
                 }
+
+                Button("Reset Onboarding", role: .destructive) {
+                    settingsService.updateSystem { $0.hasCompletedOnboarding = false }
+                    draft = settingsService.settings.system
+                    OnboardingWindowController.shared.showOnboarding {
+                        PanelController.shared.setupHotkey()
+                    }
+                }
+                .font(.system(size: 12))
             } header: {
                 Text("General")
             }

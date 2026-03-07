@@ -129,12 +129,14 @@ struct SystemSettings: Codable, Equatable {
     var globalHotkey: HotkeyBinding
     var showPanelOnAppLaunch: Bool
     var appearanceMode: AppearanceMode
+    var hasCompletedOnboarding: Bool
 
     static let defaultValue = SystemSettings(
         launchAtLogin: false,
         globalHotkey: .commandComma,
         showPanelOnAppLaunch: true,
-        appearanceMode: .auto
+        appearanceMode: .auto,
+        hasCompletedOnboarding: false
     )
 }
 
