@@ -17,6 +17,8 @@ struct GeneralSettingsView: View {
                     onSelect: { mode in
                         draft.appearanceMode = mode
                         applyAppearance(mode)
+                        // Persist immediately so the mode survives settings re-open
+                        settingsService.updateSystem { $0.appearanceMode = mode }
                     }
                 )
 
