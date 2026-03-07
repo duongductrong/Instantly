@@ -456,4 +456,26 @@ struct QuickToolbarAction: Identifiable {
         default: ""
         }
     }
+
+    /// Whether this action modifies text inline (result bubble) vs opens the Expanded Window.
+    var isInlineAction: Bool {
+        switch id {
+        case "fix_spelling", "title_case":
+            true
+        default:
+            false
+        }
+    }
+
+    /// Prompt for inline actions — instructs the LLM to return ONLY the corrected text.
+    var inlinePrompt: String {
+        switch id {
+        case "fix_spelling":
+            "Fix the spelling and grammar in the following text. Return ONLY the corrected text, nothing else:\n\n"
+        case "title_case":
+            "Convert the following text to title case. Return ONLY the converted text, nothing else:\n\n"
+        default:
+            prompt + "\n\n"
+        }
+    }
 }

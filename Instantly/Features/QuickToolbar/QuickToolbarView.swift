@@ -36,14 +36,14 @@ struct QuickToolbarView: View {
         .padding(.vertical, 6)
         .frame(width: DesignTokens.toolbarWidth)
         .background(
-            ZStack {
-                VisualEffectView(material: .popover, blendingMode: .behindWindow)
-                Color(nsColor: .windowBackgroundColor).opacity(0.55)
-            }
+            Color(nsColor: .windowBackgroundColor)
         )
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.toolbarCornerRadius, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: DesignTokens.toolbarShadowRadius, x: 0, y: 6)
-        .shadow(color: .black.opacity(0.06), radius: 2, x: 0, y: 1)
+        .shadow(color: .black.opacity(0.22), radius: DesignTokens.toolbarShadowRadius, x: 0, y: 8)
+        .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
+        .preferredColorScheme(
+            SettingsService.shared.settings.system.appearanceMode.resolvedColorScheme
+        )
         .onKeyPress(.upArrow) {
             moveSelection(by: -1)
             return .handled

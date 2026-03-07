@@ -12,6 +12,9 @@ final class QuickToolbarController {
     private var hotKeyHandlerRef: EventHandlerRef?
     private var clickMonitor: Any?
     private var capturedContext: [ContextItem] = []
+    private var inlineViewModel: InlineResultViewModel?
+    private var lastSourceApp: NSRunningApplication?
+    private var lastMouseLocation: NSPoint = .zero
 
     private init() {}
 
@@ -26,7 +29,9 @@ final class QuickToolbarController {
 
     func show(at mouseLocation: NSPoint) {
         // Capture context BEFORE our panel steals focus
+        lastSourceApp = NSWorkspace.shared.frontmostApplication
         capturedContext = ActiveAppContextService.captureContext()
+        lastMouseLocation = mouseLocation
 
         let actions = QuickToolbarAction.builtInActions
         let toolbarView = QuickToolbarView(
@@ -68,6 +73,9 @@ final class QuickToolbarController {
 
     func hide() {
         stopClickMonitor()
+        stopKeyMonitor()
+        inlineViewModel?.cancel()
+        inlineViewModel = nil
         panel?.orderOut(nil)
         capturedContext = []
     }
@@ -79,6 +87,14 @@ final class QuickToolbarController {
     // MARK: - Action Dispatch
 
     private func handleAction(_ action: QuickToolbarAction) {
+        if action.isInlineAction {
+            handleInlineAction(action)
+        } else {
+            handleExpandWindowAction(action)
+        }
+    }
+
+    private func handleExpandWindowAction(_ action: QuickToolbarAction) {
         let context = capturedContext
         hide()
 
@@ -100,6 +116,101 @@ final class QuickToolbarController {
         // Auto-submit after a short delay so the panel is fully ready
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             vm.sendMessage()
+        }
+    }
+
+    private func handleInlineAction(_ action: QuickToolbarAction) {
+        // Get the selected text from context
+        guard let selectedTextItem = capturedContext.first(where: { $0.type == .selectedText }),
+              let selectedText = selectedTextItem.rawValue, !selectedText.isEmpty
+        else {
+            // No selected text — dismiss
+            hide()
+            return
+        }
+
+        let vm = InlineResultViewModel()
+        inlineViewModel = vm
+
+        // Transform the toolbar into the inline result bubble
+        showInlineBubble(viewModel: vm)
+
+        // Start watching for Tab / Esc keys
+        startKeyMonitor()
+
+        // Start streaming the LLM result
+        vm.run(action: action, selectedText: selectedText, sourceApp: lastSourceApp)
+    }
+
+    private func showInlineBubble(viewModel: InlineResultViewModel) {
+        let bubbleView = InlineResultBubbleView(
+            viewModel: viewModel,
+            onDismiss: { [weak self] in
+                self?.hide()
+            },
+            onApply: { [weak self] in
+                self?.handleApplyInlineResult()
+            }
+        )
+
+        // Use a generous container size — the panel is transparent so only the
+        // SwiftUI bubble (with its own background + clipShape) is visible.
+        let containerSize = CGSize(
+            width: DesignTokens.inlineBubbleMaxWidth + 120,
+            height: 280
+        )
+        let origin = clampedOrigin(for: containerSize, near: lastMouseLocation)
+
+        guard let panel else { return }
+
+        let hostingView = NSHostingView(rootView: AnyView(bubbleView.ignoresSafeArea()))
+        panel.contentView = hostingView
+        panel.contentView?.wantsLayer = true
+        // Do NOT set cornerRadius or masksToBounds — the SwiftUI view handles
+        // its own clipping and shadows. The panel is just a transparent container.
+        panel.contentView?.layer?.cornerRadius = 0
+        panel.contentView?.layer?.masksToBounds = false
+        panel.setFrame(NSRect(origin: origin, size: containerSize), display: true)
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    private func handleApplyInlineResult() {
+        guard let vm = inlineViewModel else { return }
+        vm.applyResult()
+        hide()
+    }
+
+    // MARK: - Tab / Esc Key Monitor
+
+    private var keyMonitor: Any?
+
+    private func startKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+
+            // Tab key (keyCode 48) — apply result
+            if event.keyCode == 48 {
+                if let vm = inlineViewModel, !vm.isLoading, !vm.resultText.isEmpty {
+                    DispatchQueue.main.async { self.handleApplyInlineResult() }
+                    return nil // consume the event
+                }
+            }
+
+            // Esc key (keyCode 53) — dismiss
+            if event.keyCode == 53 {
+                DispatchQueue.main.async { self.hide() }
+                return nil
+            }
+
+            return event
+        }
+    }
+
+    private func stopKeyMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
         }
     }
 

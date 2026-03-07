@@ -314,4 +314,43 @@ enum ActiveAppContextService {
 
         return unsafeBitCast(element, to: AXUIElement.self)
     }
+
+    // MARK: - Replace Selected Text (Paste-Back)
+
+    /// Replaces the currently selected text in the frontmost app by simulating ⌘V.
+    /// Saves and restores the original clipboard contents.
+    static func replaceSelectedText(with newText: String, bundleIdentifier: String? = nil) {
+        let pasteboard = NSPasteboard.general
+
+        // Backup current clipboard
+        let backup: [[(String, Data)]] = pasteboard.pasteboardItems?.map { item in
+            item.types.compactMap { type in
+                guard let data = item.data(forType: type) else { return nil }
+                return (type.rawValue, data)
+            }
+        } ?? []
+
+        // Put new text on clipboard
+        pasteboard.clearContents()
+        pasteboard.setString(newText, forType: .string)
+
+        // Simulate ⌘V to paste
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        else {
+            restoreClipboard(backup: backup)
+            return
+        }
+
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+
+        // Restore original clipboard after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            restoreClipboard(backup: backup)
+        }
+    }
 }
