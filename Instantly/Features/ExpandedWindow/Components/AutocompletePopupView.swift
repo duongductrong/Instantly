@@ -13,6 +13,10 @@ struct AutocompletePopupView: View {
     private let itemHeight: CGFloat = 36
     private let cornerRadius: CGFloat = 12
 
+    private var idealHeight: CGFloat {
+        CGFloat(items.count) * itemHeight + 12 // 12 = vertical padding (6 top + 6 bottom)
+    }
+
     var body: some View {
         let _ =
             print(
@@ -39,7 +43,7 @@ struct AutocompletePopupView: View {
                         }
                         .padding(.vertical, 6)
                     }
-                    .frame(maxHeight: maxVisibleHeight)
+                    .frame(height: min(idealHeight, maxVisibleHeight))
                     .onChange(of: selectedIndex) { _, newIndex in
                         if newIndex >= 0, newIndex < items.count {
                             withAnimation(.easeOut(duration: 0.1)) {
@@ -58,6 +62,7 @@ struct AutocompletePopupView: View {
             )
             .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: -4)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+            .animation(.easeOut(duration: 0.15), value: items.count)
         }
     }
 

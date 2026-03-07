@@ -37,7 +37,7 @@ struct ExpandedWindowView: View {
                     )
                     .padding(.horizontal, 12)
                 }
-                .frame(height: inputBarMinY - 4)
+                .frame(height: inputBarMinY - 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .animation(.easeOut(duration: 0.15), value: viewModel.filteredAutocompleteItems.count)
