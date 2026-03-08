@@ -4,6 +4,7 @@ import SwiftUI
 struct BodyView: View {
     @Bindable var viewModel: ExpandedWindowViewModel
     @State private var streamingScrollTask: Task<Void, Never>?
+    @Environment(\.colorScheme) private var colorScheme
 
     private let suggestionChips = [
         "Summarize this text",
@@ -175,6 +176,7 @@ struct BodyView: View {
         } else if message.role == .assistant {
             AssistantMarkdownView(content: message.content)
                 .foregroundStyle(.primary)
+                .id("\(message.id)-\(colorScheme)")
         } else {
             Text(message.content)
                 .font(.system(size: 14))
