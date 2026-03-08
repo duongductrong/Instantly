@@ -14,7 +14,12 @@ extension NSAttributedString.Key {
 enum MentionStyle {
     /// The highlight color for mention text, loaded from the asset catalog.
     static var highlightColor: NSColor {
-        NSColor(named: "MentionHighlight") ?? NSColor(red: 0.839, green: 0.910, blue: 0.078, alpha: 1.0)
+        NSColor(named: "MentionHighlight") ?? NSColor(named: "BrandGreen") ?? NSColor(
+            red: 0.300,
+            green: 0.680,
+            blue: 0.180,
+            alpha: 1.0
+        )
     }
 
     /// Builds a styled `NSAttributedString` for a mention,

@@ -1,5 +1,8 @@
 import AppKit
 import ApplicationServices
+import os.log
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Instantly", category: "ActiveAppContext")
 
 struct ContextItem: Identifiable, Equatable {
     let id = UUID()
@@ -39,21 +42,28 @@ enum ActiveAppContextService {
             ))
         }
 
-        // Selected text chip (AX first, clipboard fallback for Electron/non-AX apps)
+        // Selected text chip (AX first, clipboard fallback for all apps when AX fails)
         if isAccessibilityGranted() {
             let pid = app.processIdentifier
             let axSelectedText = selectedText(from: pid)
             let axFailed = (axSelectedText?.isEmpty ?? true)
-            let isElectronLike = requiresClipboardFallback(bundleID: app.bundleIdentifier)
-            let shouldTryClipboardFallback = axFailed
-                && (isElectronLike || hasNonEmptySelection(from: pid))
+
+            logger
+                .debug(
+                    "AX selectedText for \(app.bundleIdentifier ?? "?", privacy: .public): \(axFailed ? "FAILED" : "OK", privacy: .public)"
+                )
+
+            // Always try clipboard fallback when AX returns nothing
             let text: String? = if let axSelectedText, !axSelectedText.isEmpty {
                 axSelectedText
-            } else if shouldTryClipboardFallback {
+            } else if axFailed {
                 selectedTextViaClipboard(forBundleID: app.bundleIdentifier, pid: pid)
             } else {
                 nil
             }
+
+            logger.debug("Final captured text length: \(text?.count ?? 0)")
+
             if let text, !text.isEmpty {
                 let truncated = text.count > 80
                     ? String(text.prefix(77)) + "..."
@@ -123,11 +133,10 @@ enum ActiveAppContextService {
         return false
     }
 
-    // MARK: - Electron / Non-AX App Detection
+    // MARK: - App Detection
 
-    /// Known bundle identifiers for apps that don't support AX selected text attributes.
-    /// These apps require the clipboard fallback (Cmd+C simulation) to capture selected text.
-    private static let clipboardFallbackBundleIDs: Set<String> = [
+    /// Known Electron / slow apps that need a longer clipboard polling wait.
+    private static let slowClipboardBundleIDs: Set<String> = [
         "com.microsoft.VSCode",
         "com.microsoft.VSCodeInsiders",
         "com.visualstudio.code.oss", // VSCodium
@@ -137,9 +146,23 @@ enum ActiveAppContextService {
         "com.brave.Browser",
     ]
 
-    private static func requiresClipboardFallback(bundleID: String?) -> Bool {
+    /// Terminal apps that use Cmd+Shift+C for copy instead of Cmd+C.
+    private static let terminalBundleIDs: Set<String> = [
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "net.kovidgoyal.kitty",
+        "com.github.wez.wezterm",
+        "dev.warp.Warp-Stable",
+    ]
+
+    private static func isSlowClipboardApp(bundleID: String?) -> Bool {
         guard let bundleID else { return false }
-        return clipboardFallbackBundleIDs.contains(bundleID)
+        return slowClipboardBundleIDs.contains(bundleID)
+    }
+
+    private static func isTerminalApp(bundleID: String?) -> Bool {
+        guard let bundleID else { return false }
+        return terminalBundleIDs.contains(bundleID)
     }
 
     /// Detect whether the focused AX element is a terminal pane.
@@ -212,9 +235,10 @@ enum ActiveAppContextService {
         let baselineChangeCount = pasteboard.changeCount
 
         // Determine whether to use Cmd+Shift+C (terminal) or Cmd+C (editor)
-        let useShiftModifier = requiresClipboardFallback(bundleID: bundleID)
-            && pid > 0
-            && isFocusedElementTerminal(pid: pid)
+        let useShiftModifier = isTerminalApp(bundleID: bundleID)
+            || (pid > 0 && isFocusedElementTerminal(pid: pid))
+
+        logger.debug("Clipboard fallback: bundleID=\(bundleID ?? "?", privacy: .public), useShift=\(useShiftModifier)")
 
         // Simulate the copy keystroke via CGEvent
         let source = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
@@ -234,8 +258,8 @@ enum ActiveAppContextService {
         keyDown.post(tap: CGEventTapLocation.cghidEventTap)
         keyUp.post(tap: CGEventTapLocation.cghidEventTap)
 
-        // Electron apps can be slower to handle copy — use longer wait
-        let maxAttempts = requiresClipboardFallback(bundleID: bundleID) ? 50 : 30
+        // Electron/slow apps need a longer polling wait
+        let maxAttempts = isSlowClipboardApp(bundleID: bundleID) ? 50 : 30
         let copiedText = waitForCopiedText(
             on: pasteboard,
             baselineChangeCount: baselineChangeCount,
