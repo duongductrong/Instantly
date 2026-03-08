@@ -37,7 +37,7 @@ final class QuickToolbarController {
         capturedContext = ActiveAppContextService.captureContext()
         lastMouseLocation = mouseLocation
 
-        let actions = QuickToolbarAction.builtInActions
+        let actions = QuickToolbarAction.fromSettings()
         currentActions = actions
         selectedIndex = 0
 

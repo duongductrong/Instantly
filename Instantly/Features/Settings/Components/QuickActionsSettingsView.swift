@@ -11,6 +11,7 @@ struct QuickActionsSettingsView: View {
 
     var body: some View {
         Form {
+            toolbarActionsSection
             mentionableModelsSection
             quickActionsSection
 
@@ -136,6 +137,52 @@ struct QuickActionsSettingsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - Toolbar Actions Section
+
+    private var toolbarActionsSection: some View {
+        Section {
+            if draft.toolbarActions.isEmpty {
+                emptyPlaceholder(
+                    icon: "rectangle.grid.1x2",
+                    message: "No toolbar actions yet."
+                )
+            } else {
+                ForEach($draft.toolbarActions) { $action in
+                    ToolbarActionRow(action: $action, onDelete: {
+                        draft.toolbarActions.removeAll { $0.id == action.id }
+                    })
+                }
+            }
+
+            Button {
+                let newAction = ToolbarAction(
+                    label: "",
+                    prompt: "",
+                    actionType: .expand
+                )
+                draft.toolbarActions.append(newAction)
+            } label: {
+                Label("Add Toolbar Action", systemImage: "plus.circle.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .buttonStyle(.plain)
+        } header: {
+            HStack(spacing: 6) {
+                Image(systemName: "rectangle.grid.1x2")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("Toolbar Actions (⌘E)")
+            }
+        } footer: {
+            Text(
+                "Actions shown in the floating toolbar when you press ⌘E. Inline actions replace selected text; Expand actions open the chat window."
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(.tertiary)
+        }
     }
 }
 
@@ -326,6 +373,146 @@ private struct QuickActionRow: View {
                             .frame(width: 60, alignment: .trailing)
                         TextField("e.g. Summarize the following:", text: $action.prompt)
                             .textFieldStyle(.roundedBorder)
+                    }
+                }
+                .padding(.top, 6)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .onAppear {
+            if action.label.isEmpty {
+                isExpanded = true
+            }
+        }
+    }
+}
+
+// MARK: - Toolbar Action Row
+
+private struct ToolbarActionRow: View {
+    @Binding var action: ToolbarAction
+    let onDelete: () -> Void
+
+    @State private var isExpanded = false
+
+    private var typeColor: Color {
+        action.actionType == .inline ? .cyan : .indigo
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header row
+            HStack(spacing: 10) {
+                Image(systemName: action.icon.isEmpty ? "bolt.fill" : action.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(typeColor)
+                    .frame(width: 24, height: 24)
+                    .background(typeColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(action.label.isEmpty ? "New Toolbar Action" : action.label)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(action.label.isEmpty ? .secondary : .primary)
+
+                        Text(action.actionType == .inline ? "Inline" : "Expand")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(typeColor)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(typeColor.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+
+                    Text(action.prompt.isEmpty ? "No prompt" : action.prompt)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $action.isEnabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red.opacity(0.7))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Expandable detail
+            if isExpanded {
+                VStack(spacing: 10) {
+                    Divider()
+
+                    HStack(spacing: 8) {
+                        Text("Label")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 60, alignment: .trailing)
+                        TextField("e.g. Summarize", text: $action.label)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    HStack(spacing: 8) {
+                        Text("Icon")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 60, alignment: .trailing)
+                        TextField("SF Symbol name", text: $action.icon)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    HStack(spacing: 8) {
+                        Text("Type")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 60, alignment: .trailing)
+                        Picker("", selection: $action.actionType) {
+                            ForEach(ToolbarActionType.allCases) { type in
+                                Text(type.title).tag(type)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("Prompt")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 60, alignment: .trailing)
+                            .padding(.top, 4)
+                        TextEditor(text: $action.prompt)
+                            .font(.system(size: 12))
+                            .frame(minHeight: 60, maxHeight: 120)
+                            .scrollContentBackground(.hidden)
+                            .padding(6)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                            )
                     }
                 }
                 .padding(.top, 6)

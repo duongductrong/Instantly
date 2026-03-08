@@ -359,11 +359,115 @@ struct MentionableModel: Codable, Equatable, Identifiable {
     }
 }
 
+// MARK: - Toolbar Action Type
+
+enum ToolbarActionType: String, Codable, CaseIterable, Identifiable {
+    case inline // Replaces text in-place (result bubble)
+    case expand // Opens expanded chat window
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .inline: "Inline (replace text)"
+        case .expand: "Expand (chat window)"
+        }
+    }
+}
+
+// MARK: - Toolbar Action (CMD+E)
+
+struct ToolbarAction: Codable, Equatable, Identifiable {
+    var id: UUID
+    var label: String
+    var prompt: String
+    var icon: String
+    var actionType: ToolbarActionType
+    var isEnabled: Bool
+
+    init(
+        id: UUID = UUID(),
+        label: String,
+        prompt: String,
+        icon: String = "bolt.fill",
+        actionType: ToolbarActionType = .expand,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.label = label
+        self.prompt = prompt
+        self.icon = icon
+        self.actionType = actionType
+        self.isEnabled = isEnabled
+    }
+
+    static let defaultToolbarActions: [ToolbarAction] = [
+        ToolbarAction(
+            label: "Summarize",
+            prompt: "Summarize the following:",
+            icon: "text.alignleft",
+            actionType: .expand
+        ),
+        ToolbarAction(
+            label: "Fix spelling & grammar",
+            prompt: "Fix the spelling and grammar in the following text. Return ONLY the corrected text, nothing else:",
+            icon: "textformat.abc",
+            actionType: .inline
+        ),
+        ToolbarAction(
+            label: "Make shorter",
+            prompt: "Make the following text shorter and more concise:",
+            icon: "arrow.down.right.and.arrow.up.left",
+            actionType: .expand
+        ),
+        ToolbarAction(
+            label: "Make longer",
+            prompt: "Expand the following text with more detail:",
+            icon: "arrow.up.left.and.arrow.down.right",
+            actionType: .expand
+        ),
+        ToolbarAction(
+            label: "Title case",
+            prompt: "Convert the following text to title case. Return ONLY the converted text, nothing else:",
+            icon: "textformat",
+            actionType: .inline
+        ),
+        ToolbarAction(
+            label: "Change tone",
+            prompt: "Change the tone of the following text to be more professional:",
+            icon: "waveform.and.mic",
+            actionType: .expand
+        ),
+    ]
+}
+
 // MARK: - Quick Actions Settings
 
 struct QuickActionsSettings: Codable, Equatable {
     var quickActions: [QuickAction]
     var mentionableModels: [MentionableModel]
+    var toolbarActions: [ToolbarAction]
+
+    /// Backward compatibility: existing saved settings may not have toolbarActions
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.quickActions = try container.decode([QuickAction].self, forKey: .quickActions)
+        self.mentionableModels = try container.decode([MentionableModel].self, forKey: .mentionableModels)
+        self.toolbarActions = try container.decodeIfPresent([ToolbarAction].self, forKey: .toolbarActions)
+            ?? ToolbarAction.defaultToolbarActions
+    }
+
+    init(
+        quickActions: [QuickAction],
+        mentionableModels: [MentionableModel],
+        toolbarActions: [ToolbarAction]
+    ) {
+        self.quickActions = quickActions
+        self.mentionableModels = mentionableModels
+        self.toolbarActions = toolbarActions
+    }
 
     static let defaultValue = QuickActionsSettings(
         quickActions: [
@@ -377,97 +481,42 @@ struct QuickActionsSettings: Codable, Equatable {
             MentionableModel(label: "Claude 3.7 Sonnet", provider: .claude, modelId: "claude-3-7-sonnet-latest"),
             MentionableModel(label: "Llama 3.1", provider: .ollama, modelId: "llama3.1"),
             MentionableModel(label: "Gemini 2.5 Pro", provider: .custom, modelId: "gemini-2.5-pro"),
-        ]
+        ],
+        toolbarActions: ToolbarAction.defaultToolbarActions
     )
 }
 
-// MARK: - Quick Toolbar Action (CMD+E)
+// MARK: - Quick Toolbar Action (runtime model for CMD+E)
 
 struct QuickToolbarAction: Identifiable {
     let id: String
     let label: String
     let icon: String
     let isDisabled: Bool
+    let prompt: String
+    let isInlineAction: Bool
 
-    /// Built-in editing actions shown in the ⌘E floating toolbar.
-    static let builtInActions: [QuickToolbarAction] = [
-        QuickToolbarAction(
-            id: "summarize",
-            label: "Summarize",
-            icon: "text.alignleft",
-            isDisabled: false
-        ),
-        QuickToolbarAction(
-            id: "key_points",
-            label: "Key points",
-            icon: "list.bullet",
-            isDisabled: true
-        ),
-        QuickToolbarAction(
-            id: "fix_spelling",
-            label: "Fix spelling & grammar",
-            icon: "textformat.abc",
-            isDisabled: false
-        ),
-        QuickToolbarAction(
-            id: "make_shorter",
-            label: "Make shorter",
-            icon: "arrow.down.right.and.arrow.up.left",
-            isDisabled: false
-        ),
-        QuickToolbarAction(
-            id: "make_longer",
-            label: "Make longer",
-            icon: "arrow.up.left.and.arrow.down.right",
-            isDisabled: false
-        ),
-        QuickToolbarAction(
-            id: "title_case",
-            label: "Title case",
-            icon: "textformat",
-            isDisabled: false
-        ),
-        QuickToolbarAction(
-            id: "change_tone",
-            label: "Change tone",
-            icon: "waveform.and.mic",
-            isDisabled: false
-        ),
-    ]
-
-    /// Returns the prompt string to prepend when this action is selected.
-    var prompt: String {
-        switch id {
-        case "summarize": "Summarize the following:"
-        case "key_points": "Extract the key points from the following:"
-        case "fix_spelling": "Fix the spelling and grammar in the following:"
-        case "make_shorter": "Make the following text shorter and more concise:"
-        case "make_longer": "Expand the following text with more detail:"
-        case "title_case": "Convert the following text to title case:"
-        case "change_tone": "Change the tone of the following text to be more professional:"
-        default: ""
-        }
-    }
-
-    /// Whether this action modifies text inline (result bubble) vs opens the Expanded Window.
-    var isInlineAction: Bool {
-        switch id {
-        case "fix_spelling", "title_case":
-            true
-        default:
-            false
-        }
-    }
-
-    /// Prompt for inline actions — instructs the LLM to return ONLY the corrected text.
+    /// Prompt for inline actions — instructs the LLM to return ONLY the modified text.
     var inlinePrompt: String {
-        switch id {
-        case "fix_spelling":
-            "Fix the spelling and grammar in the following text. Return ONLY the corrected text, nothing else:\n\n"
-        case "title_case":
-            "Convert the following text to title case. Return ONLY the converted text, nothing else:\n\n"
-        default:
-            prompt + "\n\n"
+        if isInlineAction {
+            return prompt + "\n\n"
         }
+        return prompt + "\n\n"
+    }
+
+    /// Builds the toolbar actions list from the user's saved settings.
+    static func fromSettings() -> [QuickToolbarAction] {
+        SettingsService.shared.settings.quickActions.toolbarActions
+            .filter(\.isEnabled)
+            .map { action in
+                QuickToolbarAction(
+                    id: action.id.uuidString,
+                    label: action.label,
+                    icon: action.icon,
+                    isDisabled: false,
+                    prompt: action.prompt,
+                    isInlineAction: action.actionType == .inline
+                )
+            }
     }
 }
