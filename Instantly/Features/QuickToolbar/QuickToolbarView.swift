@@ -2,11 +2,11 @@ import SwiftUI
 
 struct QuickToolbarView: View {
     let actions: [QuickToolbarAction]
+    let selectedIndex: Int
     let onAction: (QuickToolbarAction) -> Void
     let onDismiss: () -> Void
 
     @State private var hoveredActionID: String?
-    @State private var selectedIndex: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +19,6 @@ struct QuickToolbarView: View {
                 .onHover { hovering in
                     guard !action.isDisabled else { return }
                     hoveredActionID = hovering ? action.id : nil
-                    if hovering { selectedIndex = index }
                 }
                 .onTapGesture {
                     guard !action.isDisabled else { return }
@@ -44,38 +43,6 @@ struct QuickToolbarView: View {
         .preferredColorScheme(
             SettingsService.shared.settings.system.appearanceMode.resolvedColorScheme
         )
-        .onKeyPress(.upArrow) {
-            moveSelection(by: -1)
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            moveSelection(by: 1)
-            return .handled
-        }
-        .onKeyPress(.return) {
-            let idx = selectedIndex
-            guard idx >= 0, idx < actions.count, !actions[idx].isDisabled else { return .ignored }
-            onAction(actions[idx])
-            return .handled
-        }
-        .onKeyPress(.escape) {
-            onDismiss()
-            return .handled
-        }
-    }
-
-    private func moveSelection(by delta: Int) {
-        let count = actions.count
-        guard count > 0 else { return }
-        var next = (selectedIndex + delta + count) % count
-        // Skip disabled actions
-        let start = next
-        while actions[next].isDisabled {
-            next = (next + delta + count) % count
-            if next == start { break }
-        }
-        selectedIndex = next
-        hoveredActionID = nil
     }
 }
 
@@ -97,10 +64,17 @@ private struct QuickToolbarRow: View {
                 .foregroundStyle(iconColor)
                 .frame(width: 22, height: 22)
 
+            // Use hidden semibold text as sizing reference to prevent layout shift
             Text(action.label)
-                .font(.system(size: 13, weight: action.isHighlighted ? .semibold : .regular))
-                .foregroundStyle(labelColor)
+                .font(.system(size: 13, weight: .semibold))
                 .lineLimit(1)
+                .hidden()
+                .overlay(alignment: .leading) {
+                    Text(action.label)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(labelColor)
+                        .lineLimit(1)
+                }
 
             Spacer()
         }
@@ -119,7 +93,7 @@ private struct QuickToolbarRow: View {
         if action.isDisabled {
             return .secondary.opacity(0.5)
         }
-        if action.isHighlighted {
+        if isActive {
             return DesignTokens.brandGreen
         }
         return .secondary
@@ -129,18 +103,12 @@ private struct QuickToolbarRow: View {
         if action.isDisabled {
             return .secondary.opacity(0.5)
         }
-        if action.isHighlighted {
-            return .primary
-        }
         return .primary.opacity(0.85)
     }
 
     private var backgroundColor: Color {
         if isActive {
             return DesignTokens.brandGreen.opacity(0.12)
-        }
-        if action.isHighlighted, !action.isDisabled {
-            return DesignTokens.brandGreen.opacity(0.06)
         }
         return .clear
     }

@@ -16,6 +16,10 @@ final class QuickToolbarController {
     private var lastSourceApp: NSRunningApplication?
     private var lastMouseLocation: NSPoint = .zero
 
+    // Keyboard-navigation state for the toolbar
+    private var currentActions: [QuickToolbarAction] = []
+    private var selectedIndex: Int = 0
+
     private init() {}
 
     // MARK: - Hotkey Registration (Carbon API)
@@ -34,8 +38,12 @@ final class QuickToolbarController {
         lastMouseLocation = mouseLocation
 
         let actions = QuickToolbarAction.builtInActions
+        currentActions = actions
+        selectedIndex = 0
+
         let toolbarView = QuickToolbarView(
             actions: actions,
+            selectedIndex: selectedIndex,
             onAction: { [weak self] action in
                 self?.handleAction(action)
             },
@@ -79,6 +87,7 @@ final class QuickToolbarController {
         inlineViewModel = nil
         panel?.orderOut(nil)
         capturedContext = []
+        currentActions = []
     }
 
     var isVisible: Bool {
@@ -181,7 +190,7 @@ final class QuickToolbarController {
         hide()
     }
 
-    // MARK: - Tab / Esc Key Monitor
+    // MARK: - Key Monitor
 
     private var keyMonitor: Any?
 
@@ -190,21 +199,43 @@ final class QuickToolbarController {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
 
-            // Tab key (keyCode 48) — apply result
-            if event.keyCode == 48 {
-                if let vm = inlineViewModel, !vm.isLoading, !vm.resultText.isEmpty {
-                    DispatchQueue.main.async { self.handleApplyInlineResult() }
-                    return nil // consume the event
+            // --- Inline-result mode: Tab to apply, Esc to dismiss ---
+            if inlineViewModel != nil {
+                // Tab key (keyCode 48) — apply result
+                if event.keyCode == 48 {
+                    if let vm = inlineViewModel, !vm.isLoading, !vm.resultText.isEmpty {
+                        DispatchQueue.main.async { self.handleApplyInlineResult() }
+                        return nil
+                    }
                 }
+                // Esc key (keyCode 53) — dismiss
+                if event.keyCode == 53 {
+                    DispatchQueue.main.async { self.hide() }
+                    return nil
+                }
+                return event
             }
 
-            // Esc key (keyCode 53) — dismiss
-            if event.keyCode == 53 {
+            // --- Toolbar mode: arrow navigation, enter, esc ---
+            switch event.keyCode {
+            case 126: // Up Arrow
+                moveSelection(by: -1)
+                return nil
+            case 125: // Down Arrow
+                moveSelection(by: 1)
+                return nil
+            case 36: // Return / Enter
+                let idx = selectedIndex
+                if idx >= 0, idx < currentActions.count, !currentActions[idx].isDisabled {
+                    DispatchQueue.main.async { self.handleAction(self.currentActions[idx]) }
+                }
+                return nil
+            case 53: // Escape
                 DispatchQueue.main.async { self.hide() }
                 return nil
+            default:
+                return event
             }
-
-            return event
         }
     }
 
@@ -213,6 +244,43 @@ final class QuickToolbarController {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
         }
+    }
+
+    // MARK: - Keyboard Selection
+
+    private func moveSelection(by delta: Int) {
+        let count = currentActions.count
+        guard count > 0 else { return }
+        var next = (selectedIndex + delta + count) % count
+        // Skip disabled actions
+        let start = next
+        while currentActions[next].isDisabled {
+            next = (next + delta + count) % count
+            if next == start { break }
+        }
+        selectedIndex = next
+        refreshToolbarView()
+    }
+
+    private func refreshToolbarView() {
+        guard panel?.isVisible == true, inlineViewModel == nil else { return }
+
+        let toolbarView = QuickToolbarView(
+            actions: currentActions,
+            selectedIndex: selectedIndex,
+            onAction: { [weak self] action in
+                self?.handleAction(action)
+            },
+            onDismiss: { [weak self] in
+                self?.hide()
+            }
+        )
+
+        let hostingView = NSHostingView(rootView: AnyView(toolbarView.ignoresSafeArea()))
+        panel?.contentView = hostingView
+        panel?.contentView?.wantsLayer = true
+        panel?.contentView?.layer?.cornerRadius = DesignTokens.toolbarCornerRadius
+        panel?.contentView?.layer?.masksToBounds = true
     }
 
     // MARK: - Positioning
