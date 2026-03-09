@@ -1,9 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct QuickActionsSettingsView: View {
     private let settingsService = SettingsService.shared
 
     @State private var draft: QuickActionsSettings = .defaultValue
+    @State private var draggingToolbarActionID: UUID?
+    @State private var draggingQuickActionID: UUID?
 
     private var hasChanges: Bool {
         draft != settingsService.settings.quickActions
@@ -95,6 +98,15 @@ struct QuickActionsSettingsView: View {
                     QuickActionRow(action: $action, onDelete: {
                         draft.quickActions.removeAll { $0.id == action.id }
                     })
+                    .onDrag {
+                        draggingQuickActionID = action.id
+                        return NSItemProvider(object: action.id.uuidString as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: ReorderDropDelegate(
+                        currentItemID: action.id,
+                        items: $draft.quickActions,
+                        draggingItemID: $draggingQuickActionID
+                    ))
                 }
             }
 
@@ -153,6 +165,15 @@ struct QuickActionsSettingsView: View {
                     ToolbarActionRow(action: $action, onDelete: {
                         draft.toolbarActions.removeAll { $0.id == action.id }
                     })
+                    .onDrag {
+                        draggingToolbarActionID = action.id
+                        return NSItemProvider(object: action.id.uuidString as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: ReorderDropDelegate(
+                        currentItemID: action.id,
+                        items: $draft.toolbarActions,
+                        draggingItemID: $draggingToolbarActionID
+                    ))
                 }
             }
 
@@ -305,6 +326,8 @@ private struct QuickActionRow: View {
         VStack(spacing: 0) {
             // Header row
             HStack(spacing: 10) {
+                DragHandle()
+
                 Image(systemName: action.icon)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.orange)
@@ -403,6 +426,8 @@ private struct ToolbarActionRow: View {
         VStack(spacing: 0) {
             // Header row
             HStack(spacing: 10) {
+                DragHandle()
+
                 Image(systemName: action.icon.isEmpty ? "bolt.fill" : action.icon)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(typeColor)
@@ -524,5 +549,56 @@ private struct ToolbarActionRow: View {
                 isExpanded = true
             }
         }
+    }
+}
+
+// MARK: - Drag Handle
+
+private struct DragHandle: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(isHovering ? .secondary : .tertiary)
+            .frame(width: 14, height: 20)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    NSCursor.openHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+    }
+}
+
+// MARK: - Reorder Drop Delegate
+
+private struct ReorderDropDelegate<Item: Identifiable>: DropDelegate where Item.ID == UUID {
+    let currentItemID: UUID
+    @Binding var items: [Item]
+    @Binding var draggingItemID: UUID?
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingID = draggingItemID,
+              draggingID != currentItemID,
+              let fromIndex = items.firstIndex(where: { $0.id == draggingID }),
+              let toIndex = items.firstIndex(where: { $0.id == currentItemID })
+        else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            items.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingItemID = nil
+        return true
     }
 }
