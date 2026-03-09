@@ -20,7 +20,7 @@ final class SettingsWindowController {
         let hostingView = NSHostingView(rootView: settingsView)
 
         let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 650, height: 450),
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -29,7 +29,7 @@ final class SettingsWindowController {
         newWindow.titleVisibility = .hidden
         newWindow.toolbarStyle = .unifiedCompact
         newWindow.contentView = hostingView
-        newWindow.minSize = NSSize(width: 600, height: 400)
+        newWindow.minSize = NSSize(width: 700, height: 500)
         newWindow.center()
         newWindow.isReleasedWhenClosed = false
         newWindow.delegate = WindowCloseDelegate.shared
