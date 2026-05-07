@@ -39,6 +39,11 @@ class FloatingPanel: NSPanel {
         false
     }
 
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        super.setFrame(frameRect, display: flag)
+        invalidateShadow()
+    }
+
     func updateCornerRadius(_ radius: CGFloat) {
         contentView?.layer?.cornerRadius = radius
     }
@@ -58,6 +63,8 @@ class FloatingPanel: NSPanel {
             context.timingFunction = timing
             self.animator().setFrame(rect, display: true)
         }
+
+        invalidateShadow()
 
         if let layer = contentView?.layer {
             let anim = CABasicAnimation(keyPath: "cornerRadius")

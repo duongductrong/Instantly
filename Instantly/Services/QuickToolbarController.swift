@@ -19,7 +19,6 @@ final class QuickToolbarController {
     // Keyboard-navigation state for the toolbar
     private var currentActions: [QuickToolbarAction] = []
     private var selectedIndex: Int = 0
-
     private init() {}
 
     // MARK: - Hotkey Registration (Carbon API)
@@ -55,23 +54,25 @@ final class QuickToolbarController {
         let rowCount = CGFloat(actions.count)
         let estimatedHeight = (rowCount * DesignTokens.toolbarRowHeight) + 12 // 6pt padding top + bottom
         let toolbarSize = CGSize(width: DesignTokens.toolbarWidth, height: estimatedHeight)
+        let containerSize = paddedSize(for: toolbarSize)
 
         // Position: just below the mouse cursor, clamped to screen
-        let origin = clampedOrigin(for: toolbarSize, near: mouseLocation)
+        let visualOrigin = clampedOrigin(for: toolbarSize, near: mouseLocation)
+        let origin = paddedOrigin(forVisualOrigin: visualOrigin)
 
         if let panel {
             // Reuse existing panel
-            let hostingView = NSHostingView(rootView: AnyView(toolbarView.ignoresSafeArea()))
+            let hostingView = NSHostingView(
+                rootView: paddedToolbarView(toolbarView, size: containerSize).ignoresSafeArea()
+            )
             panel.contentView = hostingView
-            panel.contentView?.wantsLayer = true
-            panel.contentView?.layer?.cornerRadius = DesignTokens.toolbarCornerRadius
-            panel.contentView?.layer?.masksToBounds = true
-            panel.setFrame(NSRect(origin: origin, size: toolbarSize), display: true)
+            configureTransparentHost(panel)
+            panel.setFrame(NSRect(origin: origin, size: containerSize), display: true)
             panel.makeKeyAndOrderFront(nil)
         } else {
-            let newPanel = FloatingPanel(contentView: toolbarView)
-            newPanel.setFrame(NSRect(origin: origin, size: toolbarSize), display: true)
-            newPanel.updateCornerRadius(DesignTokens.toolbarCornerRadius)
+            let newPanel = FloatingPanel(contentView: paddedToolbarView(toolbarView, size: containerSize))
+            newPanel.setFrame(NSRect(origin: origin, size: containerSize), display: true)
+            configureTransparentHost(newPanel)
             newPanel.makeKeyAndOrderFront(nil)
             panel = newPanel
         }
@@ -163,23 +164,23 @@ final class QuickToolbarController {
             }
         )
 
-        // Use a generous container size — the panel is transparent so only the
-        // SwiftUI bubble (with its own background + clipShape) is visible.
-        let containerSize = CGSize(
-            width: DesignTokens.inlineBubbleMaxWidth + 120,
-            height: 280
+        // The panel is transparent; reserve space around the visual bubble so
+        // its SwiftUI window-style shadow can render without clipping.
+        let bubbleVisualSize = CGSize(
+            width: DesignTokens.inlineBubbleMaxWidth + 32,
+            height: 340
         )
-        let origin = clampedOrigin(for: containerSize, near: lastMouseLocation)
+        let containerSize = paddedSize(for: bubbleVisualSize)
+        let visualOrigin = clampedOrigin(for: bubbleVisualSize, near: lastMouseLocation)
+        let origin = paddedOrigin(forVisualOrigin: visualOrigin)
 
         guard let panel else { return }
 
-        let hostingView = NSHostingView(rootView: AnyView(bubbleView.ignoresSafeArea()))
+        let hostingView = NSHostingView(
+            rootView: paddedBubbleView(bubbleView, size: containerSize).ignoresSafeArea()
+        )
         panel.contentView = hostingView
-        panel.contentView?.wantsLayer = true
-        // Do NOT set cornerRadius or masksToBounds — the SwiftUI view handles
-        // its own clipping and shadows. The panel is just a transparent container.
-        panel.contentView?.layer?.cornerRadius = 0
-        panel.contentView?.layer?.masksToBounds = false
+        configureTransparentHost(panel)
         panel.setFrame(NSRect(origin: origin, size: containerSize), display: true)
         panel.makeKeyAndOrderFront(nil)
     }
@@ -276,11 +277,17 @@ final class QuickToolbarController {
             }
         )
 
-        let hostingView = NSHostingView(rootView: AnyView(toolbarView.ignoresSafeArea()))
+        let rowCount = CGFloat(currentActions.count)
+        let toolbarSize = CGSize(
+            width: DesignTokens.toolbarWidth,
+            height: (rowCount * DesignTokens.toolbarRowHeight) + 12
+        )
+        let containerSize = paddedSize(for: toolbarSize)
+        let hostingView = NSHostingView(
+            rootView: paddedToolbarView(toolbarView, size: containerSize).ignoresSafeArea()
+        )
         panel?.contentView = hostingView
-        panel?.contentView?.wantsLayer = true
-        panel?.contentView?.layer?.cornerRadius = DesignTokens.toolbarCornerRadius
-        panel?.contentView?.layer?.masksToBounds = true
+        configureTransparentHost(panel)
     }
 
     // MARK: - Positioning
@@ -309,6 +316,38 @@ final class QuickToolbarController {
         y = min(y, visibleFrame.maxY - size.height - 4)
 
         return NSPoint(x: x, y: y)
+    }
+
+    private func paddedSize(for size: CGSize) -> CGSize {
+        size
+    }
+
+    private func paddedOrigin(forVisualOrigin origin: NSPoint) -> NSPoint {
+        origin
+    }
+
+    private func paddedToolbarView(_ toolbarView: QuickToolbarView, size: CGSize) -> AnyView {
+        AnyView(
+            toolbarView
+                .frame(width: size.width, height: size.height)
+        )
+    }
+
+    private func paddedBubbleView(_ bubbleView: InlineResultBubbleView, size: CGSize) -> AnyView {
+        AnyView(
+            bubbleView
+                .frame(width: size.width, height: size.height, alignment: .topLeading)
+        )
+    }
+
+    private func configureTransparentHost(_ panel: FloatingPanel?) {
+        panel?.hasShadow = true
+        panel?.backgroundColor = .clear
+        panel?.isOpaque = false
+        panel?.contentView?.wantsLayer = true
+        panel?.contentView?.layer?.cornerRadius = DesignTokens.toolbarCornerRadius
+        panel?.contentView?.layer?.masksToBounds = true
+        panel?.invalidateShadow()
     }
 
     // MARK: - Click-Outside Monitor

@@ -96,7 +96,21 @@ final class SettingsService {
             return "Temperature must be between 0 and 2."
         }
 
-        switch model.selectedProvider {
+        if let error = validateProvider(model.selectedProvider, model: model) {
+            return error
+        }
+        if let error = validateProvider(model.defaultExpandedProvider, model: model) {
+            return "Expanded chat: \(error)"
+        }
+        if let error = validateProvider(model.defaultInlineProvider, model: model) {
+            return "Inline actions: \(error)"
+        }
+
+        return nil
+    }
+
+    func validateProvider(_ provider: ProviderKind, model: ModelSettings) -> String? {
+        switch provider {
         case .ollama:
             guard isValidURL(model.ollama.baseURL) else {
                 return "Ollama base URL is invalid."
@@ -115,6 +129,9 @@ final class SettingsService {
                 return "OpenAI API key is required."
             }
         case .claude:
+            guard isValidURL(model.claude.baseURL) else {
+                return "Claude base URL is invalid."
+            }
             guard !model.claude.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return "Claude model is required."
             }

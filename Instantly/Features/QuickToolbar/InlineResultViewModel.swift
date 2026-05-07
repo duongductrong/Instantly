@@ -8,6 +8,8 @@ final class InlineResultViewModel {
     var resultText: String = ""
     var isLoading: Bool = false
     var errorMessage: String?
+    var actionLabel: String = ""
+    var actionIcon: String = ""
 
     private var streamTask: Task<Void, Never>?
     private var sourceApp: NSRunningApplication?
@@ -16,26 +18,24 @@ final class InlineResultViewModel {
     /// Starts streaming the LLM response for the given action and selected text.
     func run(action: QuickToolbarAction, selectedText: String, sourceApp: NSRunningApplication?) {
         self.sourceApp = sourceApp
+        actionLabel = action.label
+        actionIcon = action.icon
         sourceBundleID = sourceApp?.bundleIdentifier
         resultText = ""
         errorMessage = nil
         isLoading = true
 
         let settings = SettingsService.shared.settings
-        guard settings.model.selectedProvider == .ollama else {
-            resultText = "Only Ollama provider is supported for inline actions."
-            isLoading = false
-            return
-        }
-
-        let ollamaConfig = settings.model.ollamaRuntimeConfig
+        let provider = settings.model.defaultInlineProvider
+        let runtimeConfig = settings.model.runtimeConfig(for: provider)
         let userMessage = ChatMessage(role: .user, content: action.inlinePrompt + selectedText)
 
         streamTask = Task { @MainActor in
             do {
-                let stream = OllamaChatService.sendStreamingChat(
+                let stream = ChatProviderService.sendStreamingChat(
                     messages: [userMessage],
-                    config: ollamaConfig,
+                    provider: provider,
+                    runtimeConfig: runtimeConfig,
                     systemPrompt: "You are a text editing assistant. Return ONLY the modified text, with no explanations, no markdown formatting, and no surrounding quotes."
                 )
                 for try await token in stream {

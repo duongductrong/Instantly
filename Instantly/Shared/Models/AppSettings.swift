@@ -52,6 +52,8 @@ struct AssistantSettings: Codable, Equatable {
 
 struct ModelSettings: Codable, Equatable {
     var selectedProvider: ProviderKind
+    var defaultExpandedProvider: ProviderKind
+    var defaultInlineProvider: ProviderKind
     var ollama: OllamaProviderConfig
     var openAI: OpenAIProviderConfig
     var claude: ClaudeProviderConfig
@@ -61,6 +63,8 @@ struct ModelSettings: Codable, Equatable {
 
     static let defaultValue = ModelSettings(
         selectedProvider: .ollama,
+        defaultExpandedProvider: .ollama,
+        defaultInlineProvider: .ollama,
         ollama: .defaultValue,
         openAI: .defaultValue,
         claude: .defaultValue,
@@ -68,6 +72,46 @@ struct ModelSettings: Codable, Equatable {
         temperature: AppSettings.defaultTemperature,
         maxTokens: AppSettings.defaultMaxTokens
     )
+
+    /// Backward compatibility: existing saved settings may not have defaultExpandedProvider / defaultInlineProvider
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.selectedProvider = try container.decode(ProviderKind.self, forKey: .selectedProvider)
+        self.defaultExpandedProvider = try container.decodeIfPresent(
+            ProviderKind.self,
+            forKey: .defaultExpandedProvider
+        ) ?? .ollama
+        self.defaultInlineProvider = try container
+            .decodeIfPresent(ProviderKind.self, forKey: .defaultInlineProvider) ?? .ollama
+        self.ollama = try container.decode(OllamaProviderConfig.self, forKey: .ollama)
+        self.openAI = try container.decode(OpenAIProviderConfig.self, forKey: .openAI)
+        self.claude = try container.decode(ClaudeProviderConfig.self, forKey: .claude)
+        self.custom = try container.decode(CustomProviderConfig.self, forKey: .custom)
+        self.temperature = try container.decode(Double.self, forKey: .temperature)
+        self.maxTokens = try container.decode(Int.self, forKey: .maxTokens)
+    }
+
+    init(
+        selectedProvider: ProviderKind,
+        defaultExpandedProvider: ProviderKind,
+        defaultInlineProvider: ProviderKind,
+        ollama: OllamaProviderConfig,
+        openAI: OpenAIProviderConfig,
+        claude: ClaudeProviderConfig,
+        custom: CustomProviderConfig,
+        temperature: Double,
+        maxTokens: Int
+    ) {
+        self.selectedProvider = selectedProvider
+        self.defaultExpandedProvider = defaultExpandedProvider
+        self.defaultInlineProvider = defaultInlineProvider
+        self.ollama = ollama
+        self.openAI = openAI
+        self.claude = claude
+        self.custom = custom
+        self.temperature = temperature
+        self.maxTokens = maxTokens
+    }
 
     var activeProviderModel: String {
         switch selectedProvider {
@@ -88,6 +132,34 @@ struct ModelSettings: Codable, Equatable {
         config.maxTokens = maxTokens
         return config
     }
+
+    /// Returns the provider-specific runtime config for the given provider kind.
+    func runtimeConfig(for provider: ProviderKind) -> ProviderRuntimeConfig {
+        switch provider {
+        case .ollama:
+            var config = ollama
+            config.temperature = temperature
+            config.maxTokens = maxTokens
+            return .ollama(config)
+        case .openAI:
+            return .openAI(openAI)
+        case .claude:
+            return .claude(claude)
+        case .custom:
+            var config = custom
+            config.temperature = temperature
+            config.maxTokens = maxTokens
+            return .custom(config)
+        }
+    }
+}
+
+/// Union type for provider-specific runtime configurations.
+enum ProviderRuntimeConfig {
+    case ollama(OllamaProviderConfig)
+    case openAI(OpenAIProviderConfig)
+    case claude(ClaudeProviderConfig)
+    case custom(CustomProviderConfig)
 }
 
 enum AppearanceMode: String, Codable, CaseIterable, Identifiable {
@@ -124,11 +196,28 @@ enum AppearanceMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum VisualStyle: String, Codable, CaseIterable, Identifiable {
+    case solid
+    case vibrancy
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .solid: "Solid"
+        case .vibrancy: "Vibrancy"
+        }
+    }
+}
+
 struct SystemSettings: Codable, Equatable {
     var launchAtLogin: Bool
     var globalHotkey: HotkeyBinding
     var showPanelOnAppLaunch: Bool
     var appearanceMode: AppearanceMode
+    var visualStyle: VisualStyle
     var hasCompletedOnboarding: Bool
 
     static let defaultValue = SystemSettings(
@@ -136,8 +225,36 @@ struct SystemSettings: Codable, Equatable {
         globalHotkey: .commandComma,
         showPanelOnAppLaunch: true,
         appearanceMode: .auto,
+        visualStyle: .solid,
         hasCompletedOnboarding: false
     )
+
+    /// Backward compatibility: existing saved settings may not have visualStyle
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.launchAtLogin = try container.decode(Bool.self, forKey: .launchAtLogin)
+        self.globalHotkey = try container.decode(HotkeyBinding.self, forKey: .globalHotkey)
+        self.showPanelOnAppLaunch = try container.decode(Bool.self, forKey: .showPanelOnAppLaunch)
+        self.appearanceMode = try container.decode(AppearanceMode.self, forKey: .appearanceMode)
+        self.visualStyle = try container.decodeIfPresent(VisualStyle.self, forKey: .visualStyle) ?? .solid
+        self.hasCompletedOnboarding = try container.decode(Bool.self, forKey: .hasCompletedOnboarding)
+    }
+
+    init(
+        launchAtLogin: Bool,
+        globalHotkey: HotkeyBinding,
+        showPanelOnAppLaunch: Bool,
+        appearanceMode: AppearanceMode,
+        visualStyle: VisualStyle,
+        hasCompletedOnboarding: Bool
+    ) {
+        self.launchAtLogin = launchAtLogin
+        self.globalHotkey = globalHotkey
+        self.showPanelOnAppLaunch = showPanelOnAppLaunch
+        self.appearanceMode = appearanceMode
+        self.visualStyle = visualStyle
+        self.hasCompletedOnboarding = hasCompletedOnboarding
+    }
 }
 
 enum ProviderKind: String, Codable, CaseIterable, Identifiable {
@@ -211,21 +328,77 @@ struct OpenAIProviderConfig: Codable, Equatable {
 }
 
 struct ClaudeProviderConfig: Codable, Equatable {
+    var baseURL: String
     var model: String
 
-    static let defaultValue = ClaudeProviderConfig(model: "claude-3-7-sonnet-latest")
+    static let defaultValue = ClaudeProviderConfig(
+        baseURL: "https://api.anthropic.com/v1",
+        model: "claude-3-7-sonnet-latest"
+    )
+}
+
+enum CustomProviderFormat: String, Codable, CaseIterable, Identifiable {
+    case openAI
+    case anthropic
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .openAI:
+            "OpenAI Compatible"
+        case .anthropic:
+            "Anthropic Compatible"
+        }
+    }
 }
 
 struct CustomProviderConfig: Codable, Equatable {
     var providerLabel: String
     var baseURL: String
     var model: String
+    var temperature: Double
+    var maxTokens: Int
+    var format: CustomProviderFormat
 
     static let defaultValue = CustomProviderConfig(
         providerLabel: "",
         baseURL: "",
-        model: ""
+        model: "",
+        temperature: AppSettings.defaultTemperature,
+        maxTokens: AppSettings.defaultMaxTokens,
+        format: .openAI
     )
+
+    /// Backward compatibility: existing saved settings may not have format
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.providerLabel = try container.decode(String.self, forKey: .providerLabel)
+        self.baseURL = try container.decode(String.self, forKey: .baseURL)
+        self.model = try container.decode(String.self, forKey: .model)
+        self.temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? AppSettings
+            .defaultTemperature
+        self.maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens) ?? AppSettings.defaultMaxTokens
+        self.format = try container.decodeIfPresent(CustomProviderFormat.self, forKey: .format) ?? .openAI
+    }
+
+    init(
+        providerLabel: String,
+        baseURL: String,
+        model: String,
+        temperature: Double,
+        maxTokens: Int,
+        format: CustomProviderFormat
+    ) {
+        self.providerLabel = providerLabel
+        self.baseURL = baseURL
+        self.model = model
+        self.temperature = temperature
+        self.maxTokens = maxTokens
+        self.format = format
+    }
 }
 
 struct HotkeyBinding: Codable, Equatable, Hashable {

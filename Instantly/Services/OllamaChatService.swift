@@ -84,7 +84,8 @@ enum OllamaChatService {
             let task = Task {
                 do {
                     let baseURL = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard let url = URL(string: "\(baseURL)/api/chat") else {
+                    let normalizedBaseURL = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+                    guard let url = URL(string: "\(normalizedBaseURL)/api/chat") else {
                         throw ChatError.invalidBaseURL
                     }
 

@@ -38,6 +38,7 @@ struct BodyView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear {
@@ -293,6 +294,7 @@ private struct ConversationMessageView<Content: View>: View {
 
             if message.role == .assistant { Spacer(minLength: 40) }
         }
+        .frame(maxWidth: .infinity)
         .padding(.bottom, messageBottomSpacing)
         .contentShape(Rectangle())
         .onHover { hovering in

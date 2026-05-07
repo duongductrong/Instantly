@@ -45,9 +45,11 @@ final class OnboardingViewModel {
     var openAIBaseURL: String = OpenAIProviderConfig.defaultValue.baseURL
     var openAIModel: String = OpenAIProviderConfig.defaultValue.model
     var openAIAPIKey: String = ""
+    var claudeBaseURL: String = ClaudeProviderConfig.defaultValue.baseURL
     var claudeModel: String = ClaudeProviderConfig.defaultValue.model
     var claudeAPIKey: String = ""
     var customLabel: String = ""
+    var customFormat: CustomProviderFormat = .openAI
     var customBaseURL: String = ""
     var customModel: String = ""
     var customAPIKey: String = ""
@@ -144,6 +146,8 @@ final class OnboardingViewModel {
         // Save provider configuration
         settingsService.updateModel { model in
             model.selectedProvider = selectedProvider
+            model.defaultExpandedProvider = selectedProvider
+            model.defaultInlineProvider = selectedProvider
 
             switch selectedProvider {
             case .ollama:
@@ -153,9 +157,11 @@ final class OnboardingViewModel {
                 model.openAI.baseURL = openAIBaseURL
                 model.openAI.model = openAIModel
             case .claude:
+                model.claude.baseURL = claudeBaseURL
                 model.claude.model = claudeModel
             case .custom:
                 model.custom.providerLabel = customLabel
+                model.custom.format = customFormat
                 model.custom.baseURL = customBaseURL
                 model.custom.model = customModel
             }

@@ -8,6 +8,10 @@ struct QuickToolbarView: View {
 
     @State private var hoveredActionID: String?
 
+    private var toolbarShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: DesignTokens.toolbarCornerRadius, style: .continuous)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
@@ -34,15 +38,25 @@ struct QuickToolbarView: View {
         }
         .padding(.vertical, 6)
         .frame(width: DesignTokens.toolbarWidth)
-        .background(
-            Color(nsColor: .windowBackgroundColor)
+        .background(backgroundMaterial.clipShape(toolbarShape))
+        .clipShape(toolbarShape)
+        .overlay(
+            toolbarShape
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5)
         )
-        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.toolbarCornerRadius, style: .continuous))
-        .shadow(color: .black.opacity(0.22), radius: DesignTokens.toolbarShadowRadius, x: 0, y: 8)
-        .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
         .preferredColorScheme(
             SettingsService.shared.settings.system.appearanceMode.resolvedColorScheme
         )
+    }
+
+    private var backgroundMaterial: some View {
+        Group {
+            if SettingsService.shared.settings.system.visualStyle == .vibrancy {
+                VisualEffectView(material: .popover, blendingMode: .behindWindow)
+            } else {
+                Color(nsColor: .windowBackgroundColor)
+            }
+        }
     }
 }
 

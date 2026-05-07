@@ -22,6 +22,16 @@ struct GeneralSettingsView: View {
                     }
                 )
 
+                Picker("Panel style", selection: $draft.visualStyle) {
+                    ForEach(VisualStyle.allCases) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: draft.visualStyle) { _, newValue in
+                    settingsService.updateSystem { $0.visualStyle = newValue }
+                }
+
                 HStack {
                     Text("Keyboard shortcut")
                     Spacer()

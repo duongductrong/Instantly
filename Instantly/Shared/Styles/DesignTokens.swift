@@ -29,7 +29,6 @@ enum DesignTokens {
     static let toolbarWidth: CGFloat = 240
     static let toolbarRowHeight: CGFloat = 36
     static let toolbarCornerRadius: CGFloat = 12
-    static let toolbarShadowRadius: CGFloat = 16
     static let toolbarVerticalOffset: CGFloat = 8
     static let inlineBubbleMaxWidth: CGFloat = 320
 

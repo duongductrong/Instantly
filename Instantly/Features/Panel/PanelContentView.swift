@@ -5,8 +5,11 @@ struct PanelContentView: View {
 
     var body: some View {
         ZStack {
-            // VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-            Color(nsColor: .windowBackgroundColor)
+            if SettingsService.shared.settings.system.visualStyle == .vibrancy {
+                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+            } else {
+                Color(nsColor: .windowBackgroundColor)
+            }
 
             if viewModel.isExpanded {
                 ExpandedWindowView(viewModel: PanelController.shared.expandedViewModel)

@@ -19,6 +19,7 @@ struct ModelSettingsView: View {
     var body: some View {
         Form {
             providerSection
+            interactionProvidersSection
             providerConfigSection
             parametersSection
             validationSection
@@ -64,6 +65,57 @@ struct ModelSettingsView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Interaction Providers Section
+
+    private var interactionProvidersSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 14) {
+                // Expanded chat provider
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Expanded Chat")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 6) {
+                        ForEach(ProviderKind.allCases) { provider in
+                            ProviderChip(
+                                provider: provider,
+                                isSelected: draft.defaultExpandedProvider == provider
+                            ) {
+                                draft.defaultExpandedProvider = provider
+                            }
+                        }
+                    }
+                }
+
+                // Inline actions provider
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Inline Toolbar Actions")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 6) {
+                        ForEach(ProviderKind.allCases) { provider in
+                            ProviderChip(
+                                provider: provider,
+                                isSelected: draft.defaultInlineProvider == provider
+                            ) {
+                                draft.defaultInlineProvider = provider
+                            }
+                        }
+                    }
+                }
+            }
+        } header: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("Default Provider Per Interaction")
             }
         }
     }
@@ -214,11 +266,19 @@ struct ModelSettingsView: View {
     }
 
     private var claudeConfig: some View {
-        SettingsTextField(
-            label: "Model",
-            placeholder: "claude-3-7-sonnet-latest",
-            text: $draft.claude.model
-        )
+        Group {
+            SettingsTextField(
+                label: "Base URL",
+                placeholder: "https://api.anthropic.com/v1",
+                text: $draft.claude.baseURL
+            )
+
+            SettingsTextField(
+                label: "Model",
+                placeholder: "claude-3-7-sonnet-latest",
+                text: $draft.claude.model
+            )
+        }
     }
 
     private var customConfig: some View {
@@ -229,9 +289,26 @@ struct ModelSettingsView: View {
                 text: $draft.custom.providerLabel
             )
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("API Format")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $draft.custom.format) {
+                    ForEach(CustomProviderFormat.allCases) { fmt in
+                        Text(fmt.title).tag(fmt)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text("Use OpenAI Compatible unless the provider explicitly supports Anthropic.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+
             SettingsTextField(
                 label: "Base URL",
-                placeholder: "https://...",
+                placeholder: customBaseURLPlaceholder,
                 text: $draft.custom.baseURL
             )
 
@@ -295,6 +372,15 @@ struct ModelSettingsView: View {
         case .openAI: "brain"
         case .claude: "sparkle"
         case .custom: "wrench.and.screwdriver"
+        }
+    }
+
+    private var customBaseURLPlaceholder: String {
+        switch draft.custom.format {
+        case .openAI:
+            "https://api.provider.com/v1"
+        case .anthropic:
+            "https://api.provider.com/v1"
         }
     }
 }

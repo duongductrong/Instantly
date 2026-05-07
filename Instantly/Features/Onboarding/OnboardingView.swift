@@ -6,19 +6,36 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Step indicator
+            if !viewModel.isFirstStep, !viewModel.isLastStep {
+                stepIndicator
+                    .padding(.horizontal, 40)
+                    .padding(.top, 24)
+                    .padding(.bottom, 8)
+            }
+
             // Step content
             stepContent
+                .id(viewModel.currentStep)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Navigation
             if !viewModel.isFirstStep, !viewModel.isLastStep {
                 Divider()
+                    .padding(.horizontal, 0)
                 navigationBar
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 16)
             }
         }
-        .frame(width: 520, height: 520)
+        .frame(
+            minWidth: 640,
+            idealWidth: 720,
+            maxWidth: 720,
+            minHeight: 520,
+            idealHeight: 600,
+            maxHeight: 600
+        )
         .background(.background)
     }
 
@@ -33,10 +50,11 @@ struct OnboardingView: View {
                     Rectangle()
                         .fill(
                             step.rawValue < viewModel.stepIndex
-                                ? Color.accentColor.opacity(0.5)
+                                ? DesignTokens.brandGreen.opacity(0.4)
                                 : Color.primary.opacity(0.08)
                         )
-                        .frame(height: 1.5)
+                        .frame(height: 2)
+                        .animation(.snappy(duration: 0.25), value: viewModel.stepIndex)
                 }
             }
         }
@@ -47,29 +65,31 @@ struct OnboardingView: View {
             if step.rawValue < viewModel.stepIndex {
                 // Completed
                 Circle()
-                    .fill(Color.accentColor)
-                    .frame(width: 20, height: 20)
+                    .fill(DesignTokens.brandGreen)
+                    .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.white)
+                    .transition(.scale.combined(with: .opacity))
             } else if step.rawValue == viewModel.stepIndex {
                 // Current
                 Circle()
-                    .fill(Color.accentColor)
-                    .frame(width: 20, height: 20)
+                    .fill(DesignTokens.brandGreen)
+                    .frame(width: 24, height: 24)
                 Text("\(step.rawValue + 1)")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.white)
             } else {
                 // Upcoming
                 Circle()
-                    .stroke(Color.primary.opacity(0.15), lineWidth: 1.5)
-                    .frame(width: 20, height: 20)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1.5)
+                    .frame(width: 24, height: 24)
                 Text("\(step.rawValue + 1)")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.tertiary)
             }
         }
+        .animation(.snappy(duration: 0.25), value: viewModel.stepIndex)
     }
 
     // MARK: - Step Content
@@ -79,18 +99,18 @@ struct OnboardingView: View {
         switch viewModel.currentStep {
         case .welcome:
             WelcomeStepView {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.snappy(duration: 0.3)) {
                     viewModel.goNext()
                 }
             }
             .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
+                insertion: .opacity,
+                removal: .opacity
             ))
 
         case .ollamaSetup:
             OllamaSetupStepView(viewModel: viewModel)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 32)
                 .padding(.top, 16)
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),
@@ -99,7 +119,7 @@ struct OnboardingView: View {
 
         case .providerSelection:
             ProviderStepView(viewModel: viewModel)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 32)
                 .padding(.top, 16)
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),
@@ -109,8 +129,8 @@ struct OnboardingView: View {
         case .completion:
             CompletionStepView(viewModel: viewModel)
                 .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
+                    insertion: .opacity.combined(with: .scale(scale: 0.98)),
+                    removal: .opacity
                 ))
         }
     }
@@ -120,19 +140,22 @@ struct OnboardingView: View {
     private var navigationBar: some View {
         HStack {
             Button("Back") {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.snappy(duration: 0.25)) {
                     viewModel.goBack()
                 }
             }
+            .keyboardShortcut(.escape, modifiers: [])
 
             Spacer()
 
             Button("Continue") {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.snappy(duration: 0.25)) {
                     viewModel.goNext()
                 }
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut(.return, modifiers: [])
         }
     }
 }

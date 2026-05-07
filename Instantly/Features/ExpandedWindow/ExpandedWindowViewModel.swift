@@ -144,23 +144,16 @@ final class ExpandedWindowViewModel: NSObject, NSSpeechSynthesizerDelegate {
             removeContextItem(selectedTextItem)
         }
 
-        guard settings.model.selectedProvider == .ollama else {
-            if var last = messages.last, last.role == .assistant {
-                last.content = "This provider is configured, but runtime integration is pending."
-                messages[messages.count - 1] = last
-            }
-            isLoading = false
-            return
-        }
-
+        let provider = settings.model.defaultExpandedProvider
+        let runtimeConfig = settings.model.runtimeConfig(for: provider)
         let currentMessages = messages.filter { $0.role != .assistant || !$0.content.isEmpty }
-        let ollamaConfig = settings.model.ollamaRuntimeConfig
 
         streamTask = Task { @MainActor in
             do {
-                let stream = OllamaChatService.sendStreamingChat(
+                let stream = ChatProviderService.sendStreamingChat(
                     messages: currentMessages,
-                    config: ollamaConfig,
+                    provider: provider,
+                    runtimeConfig: runtimeConfig,
                     systemPrompt: systemPrompt
                 )
                 for try await token in stream {

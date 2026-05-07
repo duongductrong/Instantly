@@ -10,8 +10,12 @@ struct FloatingPillView: View {
             .frame(width: DesignTokens.pillSize, height: DesignTokens.pillSize)
             .background(
                 ZStack {
-                    VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                    Color.black.opacity(0.7)
+                    if SettingsService.shared.settings.system.visualStyle == .vibrancy {
+                        VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                        Color.black.opacity(0.35)
+                    } else {
+                        Color.black.opacity(0.7)
+                    }
                 }
             )
             .clipShape(Circle())
