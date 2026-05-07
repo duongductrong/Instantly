@@ -46,7 +46,10 @@ struct HeaderView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.primary.opacity(0.6))
 
-                Button(action: { SettingsWindowController.shared.open() }) {
+                Button(action: {
+                    PanelController.shared.hide()
+                    SettingsWindowController.shared.open()
+                }) {
                     Image(systemName: "gearshape")
                         .font(.system(size: 13))
                         .foregroundStyle(.primary.opacity(0.6))
