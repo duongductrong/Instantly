@@ -62,17 +62,19 @@ final class QuickToolbarController {
 
         if let panel {
             // Reuse existing panel
-            let hostingView = NSHostingView(
+            let hostingView = DraggableHostingView(
                 rootView: paddedToolbarView(toolbarView, size: containerSize).ignoresSafeArea()
             )
             panel.contentView = hostingView
             configureTransparentHost(panel)
+            panel.isMovableByWindowBackground = false
             panel.setFrame(NSRect(origin: origin, size: containerSize), display: true)
             panel.makeKeyAndOrderFront(nil)
         } else {
             let newPanel = FloatingPanel(contentView: paddedToolbarView(toolbarView, size: containerSize))
             newPanel.setFrame(NSRect(origin: origin, size: containerSize), display: true)
             configureTransparentHost(newPanel)
+            newPanel.isMovableByWindowBackground = false
             newPanel.makeKeyAndOrderFront(nil)
             panel = newPanel
         }
@@ -176,11 +178,12 @@ final class QuickToolbarController {
 
         guard let panel else { return }
 
-        let hostingView = NSHostingView(
+        let hostingView = DraggableHostingView(
             rootView: paddedBubbleView(bubbleView, size: containerSize).ignoresSafeArea()
         )
         panel.contentView = hostingView
         configureTransparentHost(panel)
+        panel.isMovableByWindowBackground = true
         panel.setFrame(NSRect(origin: origin, size: containerSize), display: true)
         panel.makeKeyAndOrderFront(nil)
     }
@@ -283,11 +286,12 @@ final class QuickToolbarController {
             height: (rowCount * DesignTokens.toolbarRowHeight) + 12
         )
         let containerSize = paddedSize(for: toolbarSize)
-        let hostingView = NSHostingView(
+        let hostingView = DraggableHostingView(
             rootView: paddedToolbarView(toolbarView, size: containerSize).ignoresSafeArea()
         )
         panel?.contentView = hostingView
         configureTransparentHost(panel)
+        panel?.isMovableByWindowBackground = false
     }
 
     // MARK: - Positioning

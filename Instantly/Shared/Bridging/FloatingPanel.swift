@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+/// NSHostingView subclass that allows the window to be moved by dragging its background.
+class DraggableHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool {
+        true
+    }
+}
+
 /// NSPanel subclass for non-activating, borderless floating panel with frosted glass support.
 class FloatingPanel: NSPanel {
     init(contentView: some View) {
@@ -19,7 +26,7 @@ class FloatingPanel: NSPanel {
         isOpaque = false
         hasShadow = true
 
-        let hostingView = NSHostingView(rootView: AnyView(contentView.ignoresSafeArea()))
+        let hostingView = DraggableHostingView(rootView: AnyView(contentView.ignoresSafeArea()))
         self.contentView = hostingView
         self.contentView?.wantsLayer = true
         self.contentView?.layer?.cornerRadius = DesignTokens.panelCornerRadius
