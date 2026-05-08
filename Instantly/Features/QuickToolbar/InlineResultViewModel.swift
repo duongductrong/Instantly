@@ -15,11 +15,11 @@ final class InlineResultViewModel {
     private var sourceApp: NSRunningApplication?
     private var sourceBundleID: String?
 
-    /// Starts streaming the LLM response for the given action and selected text.
-    func run(action: QuickToolbarAction, selectedText: String, sourceApp: NSRunningApplication?) {
+    /// Starts streaming the LLM response for a custom prompt and selected text.
+    func run(prompt: String, selectedText: String, sourceApp: NSRunningApplication?) {
         self.sourceApp = sourceApp
-        actionLabel = action.label
-        actionIcon = action.icon
+        actionLabel = "Ask"
+        actionIcon = "sparkles"
         sourceBundleID = sourceApp?.bundleIdentifier
         resultText = ""
         errorMessage = nil
@@ -28,7 +28,7 @@ final class InlineResultViewModel {
         let settings = SettingsService.shared.settings
         let provider = settings.model.defaultInlineProvider
         let runtimeConfig = settings.model.runtimeConfig(for: provider)
-        let userMessage = ChatMessage(role: .user, content: action.inlinePrompt + selectedText)
+        let userMessage = ChatMessage(role: .user, content: prompt + "\n\n" + selectedText)
 
         streamTask = Task { @MainActor in
             do {
@@ -47,6 +47,13 @@ final class InlineResultViewModel {
             }
             isLoading = false
         }
+    }
+
+    /// Starts streaming the LLM response for the given action and selected text.
+    func run(action: QuickToolbarAction, selectedText: String, sourceApp: NSRunningApplication?) {
+        run(prompt: action.prompt, selectedText: selectedText, sourceApp: sourceApp)
+        actionLabel = action.label
+        actionIcon = action.icon
     }
 
     /// Replaces the selected text in the source app with the result.

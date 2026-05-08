@@ -3,9 +3,15 @@ import SwiftUI
 struct QuickToolbarView: View {
     let actions: [QuickToolbarAction]
     let selectedIndex: Int
+    let initialQueryText: String
+    let isInputFocused: Bool
+    let onQueryChange: (String) -> Void
+    let onInlineSubmit: (String) -> Void
     let onAction: (QuickToolbarAction) -> Void
     let onDismiss: () -> Void
 
+    @State private var queryText: String = ""
+    @FocusState private var inputFocusState: Bool
     @State private var hoveredActionID: String?
 
     private var toolbarShape: RoundedRectangle {
@@ -14,11 +20,22 @@ struct QuickToolbarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Inline request input row
+            inputRow
+                .focused($inputFocusState)
+                .onChange(of: isInputFocused) { _, newValue in
+                    inputFocusState = newValue
+                }
+
+            Divider()
+                .padding(.horizontal, 12)
+                .opacity(0.4)
+
             ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
                 QuickToolbarRow(
                     action: action,
                     isHovered: hoveredActionID == action.id,
-                    isKeyboardSelected: selectedIndex == index
+                    isKeyboardSelected: !isInputFocused && selectedIndex == index
                 )
                 .onHover { hovering in
                     guard !action.isDisabled else { return }
@@ -47,6 +64,54 @@ struct QuickToolbarView: View {
         .preferredColorScheme(
             SettingsService.shared.settings.system.appearanceMode.resolvedColorScheme
         )
+        .onAppear {
+            queryText = initialQueryText
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                inputFocusState = isInputFocused
+            }
+        }
+    }
+
+    private var inputRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(inputIconColor)
+                .frame(width: 22, height: 22)
+
+            TextField("Ask anything...", text: $queryText)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(.primary.opacity(0.85))
+                .textFieldStyle(.plain)
+                .lineLimit(1)
+                .onSubmit {
+                    onInlineSubmit(queryText)
+                }
+                .onChange(of: queryText) { _, newValue in
+                    onQueryChange(newValue)
+                }
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .frame(height: DesignTokens.toolbarRowHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(inputBackgroundColor)
+                .padding(.horizontal, 6)
+        )
+        .contentShape(Rectangle())
+    }
+
+    private var inputIconColor: Color {
+        if inputFocusState {
+            return DesignTokens.brandGreen
+        }
+        return .secondary
+    }
+
+    private var inputBackgroundColor: Color {
+        .clear
     }
 
     private var backgroundMaterial: some View {

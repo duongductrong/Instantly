@@ -19,6 +19,8 @@ final class QuickToolbarController {
     // Keyboard-navigation state for the toolbar
     private var currentActions: [QuickToolbarAction] = []
     private var selectedIndex: Int = 0
+    private var isInputFocused: Bool = true
+    private var currentQueryText: String = ""
     private init() {}
 
     // MARK: - Hotkey Registration (Carbon API)
@@ -39,10 +41,20 @@ final class QuickToolbarController {
         let actions = QuickToolbarAction.fromSettings()
         currentActions = actions
         selectedIndex = 0
+        isInputFocused = true
+        currentQueryText = ""
 
         let toolbarView = QuickToolbarView(
             actions: actions,
             selectedIndex: selectedIndex,
+            initialQueryText: currentQueryText,
+            isInputFocused: isInputFocused,
+            onQueryChange: { [weak self] text in
+                self?.currentQueryText = text
+            },
+            onInlineSubmit: { [weak self] text in
+                self?.handleInlineCustomSubmit(text)
+            },
             onAction: { [weak self] action in
                 self?.handleAction(action)
             },
@@ -51,7 +63,7 @@ final class QuickToolbarController {
             }
         )
 
-        let rowCount = CGFloat(actions.count)
+        let rowCount = CGFloat(actions.count + 1) // +1 for input row
         let estimatedHeight = (rowCount * DesignTokens.toolbarRowHeight) + 12 // 6pt padding top + bottom
         let toolbarSize = CGSize(width: DesignTokens.toolbarWidth, height: estimatedHeight)
         let containerSize = paddedSize(for: toolbarSize)
@@ -91,6 +103,8 @@ final class QuickToolbarController {
         panel?.orderOut(nil)
         capturedContext = []
         currentActions = []
+        isInputFocused = true
+        currentQueryText = ""
     }
 
     var isVisible: Bool {
@@ -153,6 +167,24 @@ final class QuickToolbarController {
 
         // Start streaming the LLM result
         vm.run(action: action, selectedText: selectedText, sourceApp: lastSourceApp)
+    }
+
+    private func handleInlineCustomSubmit(_ prompt: String) {
+        guard !prompt.isEmpty else { return }
+
+        guard let selectedTextItem = capturedContext.first(where: { $0.type == .selectedText }),
+              let selectedText = selectedTextItem.rawValue, !selectedText.isEmpty
+        else {
+            hide()
+            return
+        }
+
+        let vm = InlineResultViewModel()
+        inlineViewModel = vm
+
+        showInlineBubble(viewModel: vm)
+        startKeyMonitor()
+        vm.run(prompt: prompt, selectedText: selectedText, sourceApp: lastSourceApp)
     }
 
     private func showInlineBubble(viewModel: InlineResultViewModel) {
@@ -220,6 +252,27 @@ final class QuickToolbarController {
                 return event
             }
 
+            // --- Input-focus mode: down to navigate, enter to submit, esc to dismiss ---
+            if isInputFocused {
+                switch event.keyCode {
+                case 125: // Down Arrow
+                    isInputFocused = false
+                    selectedIndex = 0
+                    refreshToolbarView()
+                    return nil
+                case 36: // Return / Enter
+                    if !currentQueryText.isEmpty {
+                        DispatchQueue.main.async { self.handleInlineCustomSubmit(self.currentQueryText) }
+                    }
+                    return nil
+                case 53: // Escape
+                    DispatchQueue.main.async { self.hide() }
+                    return nil
+                default:
+                    return event
+                }
+            }
+
             // --- Toolbar mode: arrow navigation, enter, esc ---
             switch event.keyCode {
             case 126: // Up Arrow
@@ -253,8 +306,24 @@ final class QuickToolbarController {
     // MARK: - Keyboard Selection
 
     private func moveSelection(by delta: Int) {
+        if isInputFocused {
+            if delta > 0 {
+                isInputFocused = false
+                selectedIndex = 0
+                refreshToolbarView()
+            }
+            return
+        }
+
         let count = currentActions.count
         guard count > 0 else { return }
+
+        if delta < 0, selectedIndex == 0 {
+            isInputFocused = true
+            refreshToolbarView()
+            return
+        }
+
         var next = (selectedIndex + delta + count) % count
         // Skip disabled actions
         let start = next
@@ -272,6 +341,14 @@ final class QuickToolbarController {
         let toolbarView = QuickToolbarView(
             actions: currentActions,
             selectedIndex: selectedIndex,
+            initialQueryText: currentQueryText,
+            isInputFocused: isInputFocused,
+            onQueryChange: { [weak self] text in
+                self?.currentQueryText = text
+            },
+            onInlineSubmit: { [weak self] text in
+                self?.handleInlineCustomSubmit(text)
+            },
             onAction: { [weak self] action in
                 self?.handleAction(action)
             },
@@ -280,7 +357,7 @@ final class QuickToolbarController {
             }
         )
 
-        let rowCount = CGFloat(currentActions.count)
+        let rowCount = CGFloat(currentActions.count + 1) // +1 for input row
         let toolbarSize = CGSize(
             width: DesignTokens.toolbarWidth,
             height: (rowCount * DesignTokens.toolbarRowHeight) + 12
