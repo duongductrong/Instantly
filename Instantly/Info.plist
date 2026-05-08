@@ -4,5 +4,17 @@
 <dict>
 	<key>LSUIElement</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/duongductrong/Instantly/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>zcoJ90nh+SEFg6ZEkb9fwQCEK51vSIRwyn6tOsQisL0=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUShowReleaseNotes</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
 </dict>
 </plist>

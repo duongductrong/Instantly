@@ -59,6 +59,8 @@ struct SettingsView: View {
             GeneralSettingsView()
         case .about:
             AboutSettingsView()
+        case .updates:
+            UpdateSettingsView()
         case .assistant:
             AssistantSettingsView()
         case .model:

@@ -28,6 +28,11 @@ struct AboutSettingsView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.tertiary)
 
+            Button("Check for Updates…") {
+                UpdateService.shared.checkForUpdates()
+            }
+            .padding(.top, 8)
+
             Spacer()
 
             Text("© 2026 Instantly. All rights reserved.")

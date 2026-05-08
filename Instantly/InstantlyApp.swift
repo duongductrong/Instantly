@@ -17,6 +17,7 @@ struct InstantlyApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         _ = SettingsService.shared
+        _ = UpdateService.shared
 
         let settings = SettingsService.shared.settings
 
