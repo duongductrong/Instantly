@@ -34,4 +34,7 @@ enum DesignTokens {
 
     /// Brand Color (adaptive: darker green in light mode for contrast, vibrant lime in dark mode)
     static let brandGreen = Color("BrandGreen")
+
+    /// Text color optimized for legibility on top of `brandGreen`
+    static let onBrandGreen = Color.black
 }

@@ -192,7 +192,7 @@ struct InlineResultBubbleView: View {
                     Image(systemName: "arrow.turn.down.left")
                         .font(.system(size: 10, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignTokens.onBrandGreen)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(DesignTokens.brandGreen)
