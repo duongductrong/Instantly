@@ -1,0 +1,596 @@
+name: Release Publish
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Only run when a release PR is merged (not just closed)
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      HAS_DEVELOPER_ID_CERT: ${{ secrets.DEVELOPER_ID_P12 != '' && secrets.DEVELOPER_ID_PASSWORD != '' && 'true' || 'false' }}
+      HAS_SELF_SIGNED_CERT: ${{ secrets.SELF_SIGNED_CERT_P12 != '' && secrets.SELF_SIGNED_CERT_PASSWORD != '' && 'true' || 'false' }}
+      HAS_NOTARIZATION_CREDENTIALS: ${{ secrets.APPLE_ID != '' && secrets.APPLE_ID_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' && 'true' || 'false' }}
+      HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' && 'true' || 'false' }}
+      ALLOW_ADHOC_RELEASE: ${{ vars.ALLOW_ADHOC_RELEASE == 'true' && 'true' || 'false' }}
+      ALLOW_SIGNING_IDENTITY_CHANGE: ${{ vars.ALLOW_SIGNING_IDENTITY_CHANGE == 'true' && 'true' || 'false' }}
+
+    steps:
+      - name: Extract version
+        id: version
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          VERSION="${BRANCH#release/v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: v${VERSION}"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          mkdir -p build
+          # Extract the latest version entry from CHANGELOG.md
+          awk '/^## \[/{if(found) exit; found=1; next} found' CHANGELOG.md > build/changelog.md
+          echo "changelog_path=build/changelog.md" >> "$GITHUB_OUTPUT"
+          echo "--- Changelog content ---"
+          cat build/changelog.md
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.2"
+
+      - name: Build archive
+        run: |
+          set -euo pipefail
+          mkdir -p build
+
+          if ! xcodebuild archive \
+            -project Instantly.xcodeproj \
+            -scheme Instantly \
+            -configuration Release \
+            -archivePath build/Instantly.xcarchive \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            > build/archive.log 2>&1; then
+            tail -100 build/archive.log
+            exit 1
+          fi
+
+          tail -20 build/archive.log
+
+          if [ ! -d "build/Instantly.xcarchive" ]; then
+            echo "::error::Archive not found at build/Instantly.xcarchive"
+            exit 1
+          fi
+
+      - name: Guard release signing strategy
+        run: |
+          set -euo pipefail
+
+          if [ "${HAS_DEVELOPER_ID_CERT}" = "true" ]; then
+            echo "Release signing strategy: Developer ID"
+            exit 0
+          fi
+
+          if [ "${HAS_SELF_SIGNED_CERT}" = "true" ]; then
+            echo "Release signing strategy: stable self-signed certificate"
+            exit 0
+          fi
+
+          if [ "${ALLOW_ADHOC_RELEASE}" = "true" ]; then
+            echo "::warning::ALLOW_ADHOC_RELEASE=true — proceeding with ad-hoc release signing by explicit override"
+            exit 0
+          fi
+
+          echo "::error::Release publish requires Developer ID or SELF_SIGNED_CERT_* secrets. Ad-hoc fallback is disabled by default."
+          exit 1
+
+      # --- Code Signing (conditional) ---
+      # Priority: Developer ID > Self-signed cert > Ad-hoc
+      # Self-signed cert preserves TCC permissions across Sparkle updates
+      # without requiring Apple Developer Program enrollment.
+      - name: Import signing certificate
+        if: env.HAS_DEVELOPER_ID_CERT == 'true' || env.HAS_SELF_SIGNED_CERT == 'true'
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_PASSWORD: ${{ secrets.DEVELOPER_ID_PASSWORD }}
+          SELF_SIGNED_CERT_P12: ${{ secrets.SELF_SIGNED_CERT_P12 }}
+          SELF_SIGNED_CERT_PASSWORD: ${{ secrets.SELF_SIGNED_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          if [ "${HAS_DEVELOPER_ID_CERT}" = "true" ]; then
+            echo "Importing Developer ID certificate..."
+            echo "$DEVELOPER_ID_P12" | base64 --decode > $RUNNER_TEMP/certificate.p12
+            security import $RUNNER_TEMP/certificate.p12 -P "$DEVELOPER_ID_PASSWORD" \
+              -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          elif [ "${HAS_SELF_SIGNED_CERT}" = "true" ]; then
+            echo "Importing self-signed certificate (TCC-preserving fallback)..."
+            echo "$SELF_SIGNED_CERT_P12" | base64 --decode > $RUNNER_TEMP/certificate.p12
+            security import $RUNNER_TEMP/certificate.p12 -P "$SELF_SIGNED_CERT_PASSWORD" \
+              -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+            # Note: no `security add-trusted-cert` here — it requires interactive admin
+            # password and hangs in CI. The -A and -T flags are sufficient for codesign.
+          fi
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Log the signing identity that will be used
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Export app
+        run: |
+          set -euo pipefail
+          mkdir -p build build/export
+          ARCHIVE_PATH="build/Instantly.xcarchive"
+
+          if [ ! -d "$ARCHIVE_PATH" ]; then
+            echo "::error::Archive not found at $ARCHIVE_PATH. Check the Build archive step output."
+            exit 1
+          fi
+
+          if [ "${HAS_DEVELOPER_ID_CERT}" = "true" ]; then
+            # Signed export via Xcode (Developer ID)
+            cat > build/ExportOptions.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>developer-id</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+          </dict>
+          </plist>
+          PLIST
+            xcodebuild -exportArchive \
+              -archivePath "$ARCHIVE_PATH" \
+              -exportPath build/export \
+              -exportOptionsPlist build/ExportOptions.plist
+          else
+            # Manual export - copy from archive and sign the full bundle
+            ditto "$ARCHIVE_PATH/Products/Applications/Instantly.app" build/Instantly.app
+
+            APP_PATH="build/Instantly.app"
+            SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+
+            # Determine signing identity:
+            #   Self-signed cert → stable identity → TCC permissions persist across updates
+            #   Ad-hoc (--sign -) → unique per build → TCC revoked every update
+            if [ "${HAS_SELF_SIGNED_CERT}" = "true" ]; then
+              SIGN_IDENTITY="Instantly Self-Signed"
+              echo "Signing with self-signed certificate: $SIGN_IDENTITY"
+            else
+              SIGN_IDENTITY="-"
+              echo "::warning::Signing ad-hoc by explicit override — TCC and Keychain trust may be lost after update"
+            fi
+
+            # Sign Sparkle components inside-out per official docs
+            # See: https://sparkle-project.org/documentation/sandboxing/#code-signing
+            SPARKLE_VERSIONS="$SPARKLE_FRAMEWORK/Versions/B"
+            if [ -d "$SPARKLE_VERSIONS/XPCServices/Installer.xpc" ]; then
+              codesign --force --sign "$SIGN_IDENTITY" -o runtime --timestamp=none "$SPARKLE_VERSIONS/XPCServices/Installer.xpc"
+            fi
+            if [ -d "$SPARKLE_VERSIONS/XPCServices/InstallerConnection.xpc" ]; then
+              codesign --force --sign "$SIGN_IDENTITY" -o runtime --timestamp=none "$SPARKLE_VERSIONS/XPCServices/InstallerConnection.xpc"
+            fi
+            if [ -d "$SPARKLE_VERSIONS/XPCServices/InstallerStatus.xpc" ]; then
+              codesign --force --sign "$SIGN_IDENTITY" -o runtime --timestamp=none "$SPARKLE_VERSIONS/XPCServices/InstallerStatus.xpc"
+            fi
+            if [ -d "$SPARKLE_VERSIONS/XPCServices/Downloader.xpc" ]; then
+              codesign --force --sign "$SIGN_IDENTITY" -o runtime --preserve-metadata=entitlements --timestamp=none "$SPARKLE_VERSIONS/XPCServices/Downloader.xpc"
+            fi
+            if [ -f "$SPARKLE_VERSIONS/Autoupdate" ]; then
+              codesign --force --sign "$SIGN_IDENTITY" -o runtime --timestamp=none "$SPARKLE_VERSIONS/Autoupdate"
+            fi
+            if [ -d "$SPARKLE_VERSIONS/Updater.app" ]; then
+              codesign --force --sign "$SIGN_IDENTITY" -o runtime --timestamp=none "$SPARKLE_VERSIONS/Updater.app"
+            fi
+            if [ -d "$SPARKLE_FRAMEWORK" ]; then
+              codesign --force --sign "$SIGN_IDENTITY" -o runtime --timestamp=none "$SPARKLE_FRAMEWORK"
+            fi
+
+            # Pre-process entitlements: codesign does NOT substitute Xcode
+            # variables like $(PRODUCT_BUNDLE_IDENTIFIER). We must do it manually
+            # or Sparkle's XPC mach-lookup ports won't match (causes error 4005).
+            BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Contents/Info.plist")
+            PROCESSED_ENTITLEMENTS="$RUNNER_TEMP/processed-entitlements.plist"
+            sed "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$BUNDLE_ID/g" Instantly/Instantly-Release.entitlements > "$PROCESSED_ENTITLEMENTS"
+            echo "Processed entitlements with bundle ID: $BUNDLE_ID"
+
+            codesign \
+              --force \
+              --sign "$SIGN_IDENTITY" \
+              --entitlements "$PROCESSED_ENTITLEMENTS" \
+              --timestamp=none \
+              "$APP_PATH"
+          fi
+
+      - name: Verify exported app bundle
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Instantly.app"
+          if [ -d "build/export/Instantly.app" ]; then
+            APP_PATH="build/export/Instantly.app"
+          fi
+
+          codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+          codesign -dv --verbose=4 "$APP_PATH"
+          codesign -d --entitlements - "$APP_PATH" > build/exported-app-entitlements.plist
+
+          echo "--- Exported app entitlements ---"
+          cat build/exported-app-entitlements.plist
+
+          # Note: Instantly is an LSUIElement agent app that requires Accessibility.
+          # App sandbox is intentionally not enforced here to avoid breaking Accessibility API access.
+          # If sandbox is added later, re-enable the sandbox entitlement check.
+
+      - name: Capture candidate signing metadata
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Instantly.app"
+          if [ -d "build/export/Instantly.app" ]; then
+            APP_PATH="build/export/Instantly.app"
+          fi
+
+          codesign -dr - "$APP_PATH" 2>&1 | sed -n 's/^designated => //p' > build/candidate-designated-requirement.txt
+          codesign -dvv "$APP_PATH" > build/candidate-signature.txt 2>&1 || true
+
+          if [ ! -s build/candidate-designated-requirement.txt ]; then
+            echo "::error::Failed to extract candidate designated requirement"
+            exit 1
+          fi
+
+          echo "--- Candidate designated requirement ---"
+          cat build/candidate-designated-requirement.txt
+
+      - name: Compare signing identity with previous release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/previous-release
+
+          PREVIOUS_TAG=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName' 2>/dev/null || true)
+          if [ -z "$PREVIOUS_TAG" ] || [ "$PREVIOUS_TAG" = "null" ]; then
+            echo "No previous GitHub release found. Skipping signing comparison."
+            exit 0
+          fi
+
+          echo "Comparing candidate app against release: $PREVIOUS_TAG"
+          if ! gh release download "$PREVIOUS_TAG" -p 'Instantly-v*.dmg' -D build/previous-release; then
+            echo "::warning::Failed to download previous release asset. Skipping signing comparison."
+            exit 0
+          fi
+
+          PREVIOUS_DMG=$(find build/previous-release -name 'Instantly-v*.dmg' -type f | head -1)
+          if [ -z "$PREVIOUS_DMG" ]; then
+            echo "::warning::Previous release has no Instantly DMG asset. Skipping signing comparison."
+            exit 0
+          fi
+
+          MOUNT_POINT=$(mktemp -d /tmp/instantly-previous-release.XXXXXX)
+          cleanup() {
+            hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || true
+            rm -rf "$MOUNT_POINT"
+          }
+          trap cleanup EXIT
+
+          hdiutil attach "$PREVIOUS_DMG" -mountpoint "$MOUNT_POINT" -nobrowse -quiet
+          if [ ! -d "$MOUNT_POINT/Instantly.app" ]; then
+            echo "::warning::Previous release DMG does not contain Instantly.app at root. Skipping signing comparison."
+            exit 0
+          fi
+
+          ditto "$MOUNT_POINT/Instantly.app" build/previous-release/Instantly.app
+
+          codesign -dr - build/previous-release/Instantly.app 2>&1 | sed -n 's/^designated => //p' > build/previous-designated-requirement.txt
+          codesign -dvv build/previous-release/Instantly.app > build/previous-signature.txt 2>&1 || true
+
+          if [ ! -s build/previous-designated-requirement.txt ]; then
+            echo "::warning::Failed to extract previous release designated requirement. Skipping signing comparison."
+            exit 0
+          fi
+
+          echo "--- Previous designated requirement ---"
+          cat build/previous-designated-requirement.txt
+
+          if diff -u build/previous-designated-requirement.txt build/candidate-designated-requirement.txt; then
+            echo "Designated requirement matches previous release."
+            exit 0
+          fi
+
+          if [ "${ALLOW_SIGNING_IDENTITY_CHANGE}" = "true" ]; then
+            echo "::warning::ALLOW_SIGNING_IDENTITY_CHANGE=true — proceeding despite designated requirement drift"
+            exit 0
+          fi
+
+          echo "::error::Candidate designated requirement differs from previous release. Set ALLOW_SIGNING_IDENTITY_CHANGE=true only for intentional signing migrations."
+          exit 1
+
+      - name: Install create-dmg
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install create-dmg
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Instantly.app"
+          if [ -d "build/export/Instantly.app" ]; then
+            APP_PATH="build/export/Instantly.app"
+          fi
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::Instantly.app not found at expected path: $APP_PATH"
+            exit 1
+          fi
+
+          DMG_NAME="Instantly-v${{ steps.version.outputs.version }}.dmg"
+          CREATE_DMG_ARGS=(
+            --volname "Instantly"
+            --window-size 660 400
+            --icon-size 120
+            --icon "Instantly.app" 180 170
+            --app-drop-link 480 170
+            --no-internet-enable
+          )
+
+          if [ -f "assets/dmg-background.png" ]; then
+            CREATE_DMG_ARGS+=(--background "assets/dmg-background.png")
+          fi
+
+          create-dmg \
+            "${CREATE_DMG_ARGS[@]}" \
+            "build/${DMG_NAME}" \
+            "$APP_PATH"
+
+          echo "dmg_path=build/${DMG_NAME}" >> "$GITHUB_ENV"
+          echo "dmg_name=${DMG_NAME}" >> "$GITHUB_ENV"
+
+      # --- Notarization (conditional, for when Apple Developer account is available) ---
+      - name: Notarize DMG
+        if: env.HAS_NOTARIZATION_CREDENTIALS == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit "${{ env.dmg_path }}" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "${{ env.dmg_path }}"
+
+      - name: Compute SHA256
+        id: sha256
+        run: |
+          SHA=$(shasum -a 256 "${{ env.dmg_path }}" | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "SHA-256: $SHA"
+
+      - name: Append release artifact note
+        run: |
+          if [ "${HAS_DEVELOPER_ID_CERT}" = "true" ] && [ "${HAS_NOTARIZATION_CREDENTIALS}" = "true" ]; then
+            NOTE="- Release artifact: Developer ID signed and notarized."
+          elif [ "${HAS_DEVELOPER_ID_CERT}" = "true" ]; then
+            NOTE="- Release artifact: Developer ID signed, not notarized."
+          elif [ "${HAS_SELF_SIGNED_CERT}" = "true" ]; then
+            NOTE="- Release artifact: self-signed certificate, not notarized. Permissions persist across updates. Install to /Applications before first launch."
+          elif [ "${ALLOW_ADHOC_RELEASE}" = "true" ]; then
+            NOTE="- Release artifact: ad-hoc signed by explicit override. Permissions and keychain trust may be lost after updates."
+          else
+            echo "::error::Unexpected release note state: no approved signing strategy resolved"
+            exit 1
+          fi
+
+          {
+            printf "\n\n"
+            printf "### Distribution Notes\n\n"
+            printf "%s\n" "$NOTE"
+          } >> build/changelog.md
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Instantly-v${{ steps.version.outputs.version }}
+          path: ${{ env.dmg_path }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body_path: ${{ steps.changelog.outputs.changelog_path }}
+          draft: false
+          prerelease: false
+          files: ${{ env.dmg_path }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract build number
+        id: build
+        run: |
+          BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' Instantly.xcodeproj/project.pbxproj | sed 's/.*= //' | sed 's/;.*//' | tr -d ' ')
+          echo "number=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Build number: $BUILD"
+
+      - name: Sign DMG with Sparkle EdDSA key
+        id: sparkle_sign
+        if: env.HAS_SPARKLE_KEY == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          # Write private key to temp file
+          PRIVATE_KEY_FILE="$RUNNER_TEMP/sparkle_private_key.pem"
+          echo "$SPARKLE_PRIVATE_KEY" > "$PRIVATE_KEY_FILE"
+
+          SIGN_UPDATE=""
+          SIGNATURE=""
+
+          # Strategy 1: Search for pre-built sign_update in SPM artifacts and checkouts
+          echo "Searching for sign_update binary..."
+          for search_path in \
+            "build/DerivedData/SourcePackages/artifacts" \
+            "build/DerivedData/SourcePackages/checkouts/Sparkle/bin" \
+            "build/DerivedData/SourcePackages/checkouts/Sparkle"
+          do
+            if [ -z "$SIGN_UPDATE" ] || [ ! -x "$SIGN_UPDATE" ]; then
+              FOUND=$(find "$search_path" -maxdepth 2 -name "sign_update" -type f 2>/dev/null | head -1)
+              if [ -n "$FOUND" ]; then
+                chmod +x "$FOUND" 2>/dev/null || true
+                if [ -x "$FOUND" ]; then
+                  SIGN_UPDATE="$FOUND"
+                  echo "Found sign_update at: $SIGN_UPDATE"
+                  break
+                fi
+              fi
+            fi
+          done
+
+          # Strategy 2: Try to build sign_update from Sparkle package
+          if [ -z "$SIGN_UPDATE" ] || [ ! -x "$SIGN_UPDATE" ]; then
+            SPARKLE_SRC="build/DerivedData/SourcePackages/checkouts/Sparkle"
+            if [ -f "$SPARKLE_SRC/Package.swift" ]; then
+              echo "Attempting to build sign_update from Sparkle package..."
+              if swift build --package-path "$SPARKLE_SRC" --product sign_update -c release 2>/dev/null; then
+                BIN_PATH=$(swift build --package-path "$SPARKLE_SRC" --product sign_update -c release --show-bin-path 2>/dev/null)
+                if [ -n "$BIN_PATH" ] && [ -f "$BIN_PATH/sign_update" ]; then
+                  SIGN_UPDATE="$BIN_PATH/sign_update"
+                  echo "Built sign_update at: $SIGN_UPDATE"
+                fi
+              else
+                echo "::warning::swift build for sign_update failed"
+              fi
+            fi
+          fi
+
+          # Sign the DMG
+          if [ -n "$SIGN_UPDATE" ] && [ -x "$SIGN_UPDATE" ]; then
+            echo "Signing DMG with: $SIGN_UPDATE"
+            SIGN_OUTPUT=$("$SIGN_UPDATE" "${{ env.dmg_path }}" --ed-key-file "$PRIVATE_KEY_FILE" 2>&1) || true
+            echo "sign_update output: $SIGN_OUTPUT"
+            SIGNATURE=$(echo "$SIGN_OUTPUT" | grep "sparkle:edSignature=" | cut -d'"' -f2 || true)
+          else
+            echo "::warning::Could not find or build sign_update binary, skipping signature"
+          fi
+
+          echo "signature=$SIGNATURE" >> "$GITHUB_OUTPUT"
+          rm -f "$PRIVATE_KEY_FILE"
+
+          if [ -n "$SIGNATURE" ]; then
+            echo "DMG signed successfully"
+            echo "Signature: $SIGNATURE"
+          else
+            echo "::warning::DMG signature is empty — appcast will have no EdDSA signature"
+          fi
+
+      - name: Convert changelog to HTML for appcast
+        id: release_notes
+        run: |
+          # Convert markdown changelog to clean HTML for Sparkle update dialog
+          # Only keep Features and Bug Fixes sections (skip Chore/Contributors/Distribution Notes)
+          NOTES_HTML=""
+          CURRENT_SECTION=""
+          IN_RELEVANT_SECTION=false
+
+          while IFS= read -r line; do
+            if echo "$line" | grep -qE '^### Features'; then
+              if [ -n "$CURRENT_SECTION" ]; then
+                NOTES_HTML="${NOTES_HTML}</ul>"
+              fi
+              NOTES_HTML="${NOTES_HTML}<h3>✨ Features</h3><ul>"
+              CURRENT_SECTION="features"
+              IN_RELEVANT_SECTION=true
+            elif echo "$line" | grep -qE '^### Bug Fixes'; then
+              if [ -n "$CURRENT_SECTION" ]; then
+                NOTES_HTML="${NOTES_HTML}</ul>"
+              fi
+              NOTES_HTML="${NOTES_HTML}<h3>🐛 Bug Fixes</h3><ul>"
+              CURRENT_SECTION="bugfixes"
+              IN_RELEVANT_SECTION=true
+            elif echo "$line" | grep -qE '^### '; then
+              # Other sections (Chore, Contributors, etc.) — skip
+              if [ -n "$CURRENT_SECTION" ]; then
+                NOTES_HTML="${NOTES_HTML}</ul>"
+              fi
+              CURRENT_SECTION=""
+              IN_RELEVANT_SECTION=false
+            elif [ "$IN_RELEVANT_SECTION" = true ] && echo "$line" | grep -qE '^- '; then
+              # Extract list item text, strip commit hashes and PR refs
+              ITEM=$(echo "$line" | sed 's/^- *//' | sed 's/ ([a-f0-9]\{7\})$//' | sed 's/ (#[0-9]*)//g' | sed 's/^ *//')
+              if [ -n "$ITEM" ]; then
+                NOTES_HTML="${NOTES_HTML}<li>${ITEM}</li>"
+              fi
+            fi
+          done < "${{ steps.changelog.outputs.changelog_path }}"
+
+          # Close last open list
+          if [ -n "$CURRENT_SECTION" ]; then
+            NOTES_HTML="${NOTES_HTML}</ul>"
+          fi
+
+          # Fallback if no relevant sections found
+          if [ -z "$NOTES_HTML" ]; then
+            NOTES_HTML="<h3>🔧 Maintenance</h3><ul><li>Bug fixes and improvements</li></ul>"
+          fi
+
+          echo "release_notes_html=$NOTES_HTML" >> "$GITHUB_OUTPUT"
+
+      - name: Update appcast.xml
+        run: |
+          chmod +x scripts/update-appcast.py
+          ./scripts/update-appcast.py \
+            "${{ steps.version.outputs.version }}" \
+            "${{ steps.build.outputs.number }}" \
+            "${{ env.dmg_path }}" \
+            "appcast.xml" \
+            "${{ steps.sparkle_sign.outputs.signature }}" \
+            "${{ steps.release_notes.outputs.release_notes_html }}"
+
+      - name: Update Homebrew cask
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha256.outputs.sha256 }}"
+          sed -i '' "s/version \".*\"/version \"${VERSION}\"/" Casks/instantly.rb
+          sed -i '' "s/sha256 \".*\"/sha256 \"${SHA}\"/" Casks/instantly.rb
+
+      - name: Commit appcast and cask update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml Casks/instantly.rb
+          git commit -m "chore: update appcast and cask for v${{ steps.version.outputs.version }}"
+          # Pull rebase to avoid race conditions if another commit landed on master
+          git pull --rebase origin master || true
+          git push origin master

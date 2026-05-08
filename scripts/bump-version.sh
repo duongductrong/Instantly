@@ -43,13 +43,20 @@ esac
 
 NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 
+# Cross-platform sed in-place
+if sed --version >/dev/null 2>&1; then
+  SED_INPLACE() { sed -i "$@"; }
+else
+  SED_INPLACE() { sed -i '' "$@"; }
+fi
+
 # Replace all occurrences of MARKETING_VERSION in pbxproj
-sed -i '' "s/MARKETING_VERSION = ${CURRENT_VERSION}/MARKETING_VERSION = ${NEW_VERSION}/g" "$PBXPROJ"
+SED_INPLACE "s/MARKETING_VERSION = ${CURRENT_VERSION}/MARKETING_VERSION = ${NEW_VERSION}/g" "$PBXPROJ"
 
 # Bump build number (increment by 1)
 CURRENT_BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' "$PBXPROJ" | sed 's/.*= //' | sed 's/;.*//' | tr -d ' ')
 NEW_BUILD=$((CURRENT_BUILD + 1))
-sed -i '' "s/CURRENT_PROJECT_VERSION = ${CURRENT_BUILD}/CURRENT_PROJECT_VERSION = ${NEW_BUILD}/g" "$PBXPROJ"
+SED_INPLACE "s/CURRENT_PROJECT_VERSION = ${CURRENT_BUILD}/CURRENT_PROJECT_VERSION = ${NEW_BUILD}/g" "$PBXPROJ"
 
 echo "version=${NEW_VERSION}"
 echo "previous_version=${CURRENT_VERSION}"

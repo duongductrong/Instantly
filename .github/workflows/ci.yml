@@ -1,0 +1,74 @@
+name: CI Build Check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.2"
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          mkdir -p build
+
+          if ! xcodebuild \
+            -project Instantly.xcodeproj \
+            -scheme Instantly \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test > build/ci-test.log 2>&1; then
+            tail -100 build/ci-test.log
+            exit 1
+          fi
+
+          tail -20 build/ci-test.log
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          mkdir -p build
+
+          if ! xcodebuild \
+            -project Instantly.xcodeproj \
+            -scheme Instantly \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build > build/ci-build.log 2>&1; then
+            tail -100 build/ci-build.log
+            exit 1
+          fi
+
+          tail -20 build/ci-build.log
+
+      - name: Verify app bundle
+        run: |
+          APP_PATH="build/DerivedData/Build/Products/Release/Instantly.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::Instantly.app not found at expected path"
+            exit 1
+          fi
+          echo "Build successful: $APP_PATH"

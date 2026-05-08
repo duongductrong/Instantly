@@ -1,0 +1,155 @@
+name: Release Notify
+
+on:
+  workflow_run:
+    workflows: ["Release Publish"]
+    types: [completed]
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Prepare: fetch release metadata from GitHub API
+  # ──────────────────────────────────────────────
+  prepare:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      release_url: ${{ steps.release.outputs.release_url }}
+      download_url: ${{ steps.release.outputs.download_url }}
+      body: ${{ steps.release.outputs.body }}
+    steps:
+      - name: Fetch latest release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Get the latest release from GitHub API
+          RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/latest)
+
+          VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name' | sed 's/^v//')
+          RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+          BODY=$(echo "$RELEASE_JSON" | jq -r '.body // "No release notes."')
+
+          # Find the DMG asset download URL
+          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".dmg")) | .browser_download_url' | head -1)
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            DOWNLOAD_URL="$RELEASE_URL"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_url=$RELEASE_URL" >> "$GITHUB_OUTPUT"
+          echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+
+          # Use a delimiter for multiline body
+          EOF_MARKER=$(uuidgen)
+          echo "body<<$EOF_MARKER" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "$EOF_MARKER" >> "$GITHUB_OUTPUT"
+
+          echo "Release: v${VERSION}"
+
+  # ──────────────────────────────────────────────
+  # Discord
+  # ──────────────────────────────────────────────
+  discord:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_URL: ${{ needs.prepare.outputs.release_url }}
+          DOWNLOAD_URL: ${{ needs.prepare.outputs.download_url }}
+          BODY: ${{ needs.prepare.outputs.body }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "DISCORD_WEBHOOK_URL not configured, skipping."
+            exit 0
+          fi
+
+          # Escape body for JSON embedding
+          ESCAPED_BODY=$(echo "$BODY" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+
+          # Truncate to Discord embed description limit (4096 chars)
+          if [ ${#ESCAPED_BODY} -gt 4000 ]; then
+            ESCAPED_BODY="${ESCAPED_BODY:0:3997}..."
+          fi
+
+          PAYLOAD=$(cat <<DISCORD_EOF
+          {
+            "embeds": [{
+              "title": "🚀 Instantly v${VERSION} Released",
+              "url": "${RELEASE_URL}",
+              "description": "${ESCAPED_BODY}",
+              "color": 5814783,
+              "fields": [
+                {
+                  "name": "📦 Download",
+                  "value": "[Instantly-v${VERSION}.dmg](${DOWNLOAD_URL})",
+                  "inline": true
+                },
+                {
+                  "name": "📋 Release Page",
+                  "value": "[View on GitHub](${RELEASE_URL})",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "Instantly Release Automation"
+              },
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }]
+          }
+          DISCORD_EOF
+          )
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$DISCORD_WEBHOOK_URL")
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "✅ Discord notification sent (HTTP $HTTP_STATUS)"
+          else
+            echo "::warning::Discord notification failed (HTTP $HTTP_STATUS)"
+          fi
+
+  # ──────────────────────────────────────────────
+  # Add more channels below. Each channel is a
+  # separate job that runs in parallel.
+  #
+  # Example — Slack:
+  #
+  # slack:
+  #   needs: prepare
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Send Slack notification
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  #         VERSION: ${{ needs.prepare.outputs.version }}
+  #         RELEASE_URL: ${{ needs.prepare.outputs.release_url }}
+  #         BODY: ${{ needs.prepare.outputs.body }}
+  #       run: |
+  #         ...
+  #
+  # Example — Telegram:
+  #
+  # telegram:
+  #   needs: prepare
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Send Telegram notification
+  #       env:
+  #         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  #         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  #         VERSION: ${{ needs.prepare.outputs.version }}
+  #         BODY: ${{ needs.prepare.outputs.body }}
+  #       run: |
+  #         ...
+  # ──────────────────────────────────────────────
