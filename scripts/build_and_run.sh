@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="Snapzy"
-DEBUG_BUNDLE_NAME="Snapzy Debug"
-SCHEME="Snapzy"
-PROJECT="Snapzy.xcodeproj"
-LOG_SUBSYSTEM="${LOG_SUBSYSTEM:-Snapzy}"
+APP_NAME="Instantly"
+SCHEME="Instantly"
+PROJECT="Instantly.xcodeproj"
+LOG_SUBSYSTEM="${LOG_SUBSYSTEM:-com.duongductrong.Instantly}"
 
 MODE="run"
 CONFIGURATION="${CONFIGURATION:-Debug}"
@@ -42,11 +41,11 @@ usage() {
 ${BOLD}Usage:${NC} $0 [run|--logs|--telemetry|--debug|--verify] [options]
 
 ${BOLD}Modes:${NC}
-  run                 Kill, build, and launch Snapzy.app (default)
-  --logs, logs        Launch then stream unified logs for process == "Snapzy"
+  run                 Kill, build, and launch Instantly.app (default)
+  --logs, logs        Launch then stream unified logs for process == "Instantly"
   --telemetry         Launch then stream unified logs for subsystem == "$LOG_SUBSYSTEM"
   --debug, debug      Build then launch the app binary under lldb
-  --verify, verify    Launch and confirm the Snapzy process is running
+  --verify, verify    Launch and confirm the Instantly process is running
 
 ${BOLD}Options:${NC}
   --configuration C   Build configuration. Default: Debug
@@ -173,12 +172,7 @@ build_products_dir() {
 }
 
 app_bundle_path() {
-  local bundle_name="$APP_NAME"
-  if [[ "$CONFIGURATION" == "Debug" ]]; then
-    bundle_name="$DEBUG_BUNDLE_NAME"
-  fi
-
-  printf "%s/%s.app" "$(build_products_dir)" "$bundle_name"
+  printf "%s/%s.app" "$(build_products_dir)" "$APP_NAME"
 }
 
 app_binary_path() {
